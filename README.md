@@ -41,7 +41,7 @@
 2. Install dependencies:  
 
    ` cd SkyeUpload/server   
-    npm install ` 
+    npm install  
     cd ../client 
     npm install `
 
