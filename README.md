@@ -1,6 +1,5 @@
 # SkyeUpload 🔺🔻
 
-## ---
 
 - SkyeUpload is your personal media server and client application, designed for streaming your very own content\! 🎬 
 
@@ -8,7 +7,6 @@
     
 - Includes a powerful server with an admin panel for effortlessly managing your media library. 💖
 
-## ---
 
 ## Features:
 
