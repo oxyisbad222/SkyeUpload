@@ -1,14 +1,14 @@
 # SkyeUpload 🔺🔻
 
----
+## ---
 
 - SkyeUpload is your personal media server and client application, designed for streaming your very own content\! 🎬 
 
 - It boasts a sleek, web-based client that can be added right to your homescreen as a Progressive Web App (PWA) 📱,   
     
-- Includes a powerful server with an admin panel for effortlessly managing your media library. This project is proudly open-source and brought to you by Skye. 💖
+- Includes a powerful server with an admin panel for effortlessly managing your media library. 💖
 
----
+## ---
 
 ## Features:
 
