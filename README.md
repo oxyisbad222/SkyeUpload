@@ -1,4 +1,4 @@
-### SkyeUpload 🔺🔻
+## SkyeUpload 🔺🔻
 ___________________________________________________________________________________________________________________________________________________________________________________________
 
 - SkyeUpload is your personal media server and client application, designed for streaming your very own content\! 🎬 
