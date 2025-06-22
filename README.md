@@ -39,11 +39,10 @@
    git clone https://github.com/your-github-username/SkyeUpload.git
 
 2. Install dependencies:  
-
-`cd SkyeUpload/server` 
-`npm install` 
-`cd ../client` 
-`npm install`
+    `cd SkyeUpload/server` 
+    `npm install` 
+    `cd ../client` 
+    `npm install`
 
 4. Configure the server:  
    * Create a .env file in the server directory.  
