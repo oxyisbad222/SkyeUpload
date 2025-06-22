@@ -7,7 +7,6 @@
     
 - Includes a powerful server with an admin panel for effortlessly managing your media library. 💖
 
-
 ## Features:
 
 ### Client (PWA)
