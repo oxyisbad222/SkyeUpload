@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    const API_URL = 'https://skyeupload.fly.dev'; // Base URL of your backend
+    const API_URL = 'https://skyeupload-server.fly.dev'; // Base URL of your backend
     let mediaLibraryCache = null;
 
     // --- Pull To Refresh Logic ---
@@ -45,11 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- RENDER FUNCTIONS ---
     const renderHome = async () => {
-        content.innerHTML = `<div class="p-4"><h1 class="text-2xl font-bold">Loading...</h1></div>`;
+        content.innerHTML = `<div class="p-4 text-center"><h1 class="text-2xl font-bold">Loading Library...</h1></div>`;
         try {
             if (!mediaLibraryCache) {
                  const response = await fetch(`${API_URL}/api/media`);
-                 if (!response.ok) throw new Error(`Server error!`);
+                 if (!response.ok) throw new Error(`Server connection failed.`);
                  mediaLibraryCache = await response.json();
             }
            
@@ -63,17 +63,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="space-y-8">
                     <div>
                         <h2 class="text-xl font-semibold mb-4">Movies</h2>
-                        <div class="media-grid">${mediaLibraryCache.movies.map(createMediaHtml).join('') || '<p class="text-sm text-gray-400">No movies in the library.</p>'}</div>
+                        <div class="media-grid">${mediaLibraryCache.movies.length > 0 ? mediaLibraryCache.movies.map(createMediaHtml).join('') : '<p class="text-sm text-gray-400">No movies in the library.</p>'}</div>
                     </div>
                     <div>
                         <h2 class="text-xl font-semibold mb-4">TV Shows</h2>
-                        <div class="media-grid">${mediaLibraryCache.tvShows.map(createMediaHtml).join('') || '<p class="text-sm text-gray-400">No TV shows in the library.</p>'}</div>
+                        <div class="media-grid">${mediaLibraryCache.tvShows.length > 0 ? mediaLibraryCache.tvShows.map(createMediaHtml).join('') : '<p class="text-sm text-gray-400">No TV shows in the library.</p>'}</div>
                     </div>
                 </div>`;
         } catch (error) {
             console.error("Failed to render home:", error);
             mediaLibraryCache = null;
-            content.innerHTML = `<div class="p-4 bg-red-900 text-red-200 rounded-lg">Error loading media. Please pull down to refresh.</div>`;
+            content.innerHTML = `<div class="p-4 bg-red-900 text-red-200 rounded-lg text-center">
+                <p class="font-bold">Connection Error</p>
+                <p class="text-sm">${error.message} Please pull down to refresh.</p>
+            </div>`;
         }
     };
 
@@ -81,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `
             <h1 class="text-3xl font-bold mb-6">Search</h1>
             <div class="relative">
-                <input type="text" placeholder="Search for movies, shows..." class="w-full bg-gray-800 border border-gray-700 rounded-lg py-3 px-4 pl-10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="text" placeholder="Search for movies, shows..." class="w-full">
                 <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"></i>
             </div>`;
         lucide.createIcons();
@@ -91,8 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `
             <h1 class="text-3xl font-bold mb-6">Request Content</h1>
             <form id="request-form" class="space-y-4">
-                <input id="request-title" type="text" placeholder="Movie or TV Show Title" class="w-full" required>
-                <textarea id="request-details" placeholder="Add any details (e.g., year, specific version)" class="w-full h-24 resize-none"></textarea>
+                <input id="request-title" type="text" placeholder="Movie or TV Show Title" required>
+                <textarea id="request-details" placeholder="Add any details (e.g., year, specific version)" class="h-24 resize-none"></textarea>
                 <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-500">Submit Request</button>
             </form>
             <div id="request-status" class="mt-6"></div>`;
@@ -103,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h1 class="text-3xl font-bold mb-6">Settings</h1>
              <div class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <p class="text-sm">App Version: 1.0.0</p>
+                    <p class="text-sm">App Version: 1.0.1</p>
                     <p class="text-xs text-gray-400 mt-1">Developed by Skye</p>
                 </div>
             </div>`;
@@ -122,12 +125,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="details-body">
                         <h2 class="text-2xl font-bold">${item.title}</h2>
                         <p class="text-sm text-gray-400 mb-4">${item.release_date ? item.release_date.substring(0,4) : ''}</p>
-                        <p class="mb-6 text-gray-300">${item.overview}</p>
-                        <button class="play-button">Play</button>
+                        <p class="mb-6 text-gray-300">${item.overview || 'No description available.'}</p>
+                        <button class="play-button"><i data-lucide="play"></i>Play</button>
                     </div>
                 </div>
             </div>`;
         document.body.appendChild(modal);
+        lucide.createIcons();
         setTimeout(() => modal.classList.add('visible'), 10);
         
         const closeModal = () => {
@@ -144,7 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function showVideoPlayer(item) {
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
-        const videoSrc = `${API_URL}${item.filePath}`;
+        
+        // Correctly construct the video source URL based on the stream type
+        const videoSrc = (item.streamType === 'file')
+            ? `${API_URL}${item.filePath}` // For files: https://server.com/uploads/file.mp4
+            : `${API_URL}${item.filePath}`; // For torrents: https://server.com/api/stream/hash/index
 
         modal.innerHTML = `
             <div class="modal-content">
@@ -216,6 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateActiveNav(path);
     };
     const updateActiveNav = (path) => { navItems.forEach(item => { item.classList.toggle('active', item.getAttribute('href') === path); }); };
+    
     window.addEventListener('hashchange', router);
+    
+    // Initial load
     router();
 });
