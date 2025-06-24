@@ -21,9 +21,14 @@ async function startServer() {
         'udp://tracker.torrent.eu.org:451/announce',
     ];
 
-    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
+    // --- CORRECTED CORS Configuration ---
+    const allowedOrigins = [
+        'https://skye-upload-admin.vercel.app',
+        'https://skye-upload.vercel.app'
+    ];
     const corsOptions = {
         origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps or curl) or from whitelisted origins.
             if (!origin || allowedOrigins.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
