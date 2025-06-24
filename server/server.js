@@ -11,9 +11,28 @@ const app = express();
 const client = new WebTorrent();
 const PORT = process.env.PORT || 3000;
 
+// --- CORS Configuration ---
+// Define the list of allowed origins (your frontend URLs)
+const allowedOrigins = [
+    'https://skye-upload-admin.vercel.app',
+    'https://skye-upload.vercel.app', // Add client URL
+    'http://localhost:8080', // for local testing
+    'http://127.0.0.1:8080'  // for local testing
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    }
+};
+
 // --- Persistent Storage Setup for Fly.io ---
-// Fly.io mounts volumes at '/data'. We'll use this path for persistent storage.
-// This environment variable is a placeholder and not set by Fly.io, the default to '/data' is what matters.
 const dataDir = process.env.FLYSK_DATA_DIR || '/data';
 const dbPath = path.join(dataDir, 'database.json');
 const uploadDir = path.join(dataDir, 'uploads');
@@ -28,9 +47,7 @@ const readDb = () => {
             const data = fs.readFileSync(dbPath);
             return JSON.parse(data);
         }
-        // If DB doesn't exist, create it with a default structure
         const defaultDb = { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [] };
-        // Ensure the data directory exists before writing the initial DB
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }
@@ -50,7 +67,6 @@ const writeDb = (data) => {
     }
 };
 
-// Load initial data from DB
 let { mediaLibrary, contentRequests } = readDb();
 
 // --- Ensure Uploads Directory Exists ---
@@ -69,7 +85,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // --- Middleware ---
-app.use(cors());
+app.use(cors(corsOptions)); // Use the new CORS options
 app.use(express.json());
 
 // Serve static files from client, admin, and uploads directories
@@ -96,14 +112,15 @@ const addMediaToLibrary = (title, type, genre, filename) => {
         throw new Error('Invalid media type specified.');
     }
     
-    writeDb({ mediaLibrary, contentRequests }); // Persist changes to the database file
+    writeDb({ mediaLibrary, contentRequests });
     console.log('New media added and DB updated:', newMedia);
     return newMedia;
 };
 
+
 // --- API ROUTES ---
 
-// Main endpoint for adding new content via file upload or magnet link
+// Main endpoint for adding new content
 app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
     const { title, type, genre, url, source_type } = req.body;
 
@@ -140,9 +157,47 @@ app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
     }
 });
 
+
 // Endpoint to get the entire media library
 app.get('/api/media', (req, res) => {
     res.json(mediaLibrary);
+});
+
+// Endpoint for streaming video files
+app.get('/api/stream/:fileName', (req, res) => {
+    const { fileName } = req.params;
+    const filePath = path.join(uploadDir, fileName);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).send('File not found');
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        const file = fs.createReadStream(filePath, { start, end });
+        const head = {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+    } else {
+        const head = {
+            'Content-Length': fileSize,
+            'Content-Type': 'video/mp4',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(filePath).pipe(res);
+    }
 });
 
 // Endpoint for clients to submit content requests
@@ -172,6 +227,7 @@ app.get('/api/admin/status', (req, res) => {
         download_speed: (client.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s'
     });
 });
+
 
 // Catch-all route to serve the client's index.html for any other request
 app.get(/^\/(?!admin).*/, (req, res) => {

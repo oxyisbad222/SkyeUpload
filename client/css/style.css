@@ -1,34 +1,48 @@
 /* General Body and Font Styles */
+:root {
+    --brand-color: #4f46e5; /* indigo-600 */
+    --background-start: #111827; /* gray-900 */
+    --background-end: #000000;
+    --text-primary: #f9fafb; /* gray-50 */
+    --text-secondary: #9ca3af; /* gray-400 */
+    --surface-color: #1f2937; /* gray-800 */
+    --border-color: #374151; /* gray-700 */
+}
+
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
-    background-color: #0a0a0a;
-    color: #f0f0f0;
+    background: linear-gradient(to bottom, var(--background-start), var(--background-end));
+    color: var(--text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overscroll-behavior-y: contain; /* Prevents pull-to-refresh on the whole page */
-}
-
-/* Add safe area padding for iOS devices with notches */
-body {
+    overscroll-behavior-y: contain;
+    min-height: 100vh;
     padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Main Content Area */
 #app-content {
     padding: 1rem;
-    padding-bottom: 7rem; /* Ensure content clears the bottom nav bar */
+    padding-bottom: 7rem;
 }
 
 /* Bottom Navigation Bar Styling */
 nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     background: rgba(10, 10, 10, 0.7);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: env(safe-area-inset-bottom); /* Safe area for bottom nav */
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
 .nav-item {
@@ -36,17 +50,17 @@ nav {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #888;
+    color: var(--text-secondary);
     transition: color 0.2s ease-in-out, transform 0.1s ease-in-out;
     padding: 0.75rem 0.5rem;
     text-decoration: none;
-    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
 }
 
 .nav-item i {
     width: 24px;
     height: 24px;
     margin-bottom: 4px;
+    transition: all 0.2s ease-in-out;
 }
 
 .nav-item .text-xs {
@@ -55,35 +69,101 @@ nav {
 }
 
 .nav-item.active {
-    color: #ffffff;
+    color: var(--brand-color);
 }
 
 .nav-item:active {
     transform: scale(0.95);
 }
 
-/* Re-implementing basic Tailwind-like classes for elements if not using a framework */
-/* In the final version, a framework like TailwindCSS would be used for these */
-.bg-black { background-color: #000; }
-.text-white { color: #fff; }
-.font-sans { font-family: 'Inter', sans-serif; }
-.pb-24 { padding-bottom: 6rem; }
-.p-4 { padding: 1rem; }
-.text-2xl { font-size: 1.5rem; line-height: 2rem; }
-.font-bold { font-weight: 700; }
-.fixed { position: fixed; }
-.bottom-0 { bottom: 0; }
-.left-0 { left: 0; }
-.right-0 { right: 0; }
-.bg-gray-900 { background-color: #1a1a1a; }
-.bg-opacity-80 { --tw-bg-opacity: 0.8; }
-.border-t { border-top-width: 1px; }
-.border-gray-700 { border-color: #4a5568; }
-.flex { display: flex; }
-.justify-around { justify-content: space-around; }
-.max-w-screen-md { max-width: 768px; }
-.mx-auto { margin-left: auto; margin-right: auto; }
-.flex-1 { flex: 1 1 0%; }
-.text-center { text-align: center; }
-.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-.block { display: block; }
+/* Media Grid */
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1.25rem;
+}
+
+.media-item {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.media-item:hover {
+    transform: scale(1.05);
+}
+
+.media-item img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    aspect-ratio: 2 / 3;
+    border-radius: 0.5rem;
+    background-color: var(--surface-color);
+}
+
+.media-item h3 {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Video Player Modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-backdrop.visible {
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: #000;
+    width: 100%;
+    max-width: 90vw;
+    max-height: 90vh;
+    aspect-ratio: 16/9;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.modal-backdrop.visible .modal-content {
+    transform: scale(1);
+}
+
+.modal-content video {
+    width: 100%;
+    height: 100%;
+}
+
+.close-modal {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background-color: var(--surface-color);
+    color: var(--text-primary);
+    border-radius: 9999px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid #000;
+    z-index: 60;
+}
