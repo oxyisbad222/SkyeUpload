@@ -10,50 +10,52 @@
     <meta name="apple-mobile-web-app-title" content="SkyeUpload">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     
-    <!-- Fallback for other browsers -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a1a1a">
+    <meta name="theme-color" content="#111827">
 
     <title>SkyeUpload</title>
 
-    <!-- Stylesheets -->
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="css/style.css">
     
-    <!-- Fonts and Icons -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-
 </head>
-<body class="bg-black text-white font-sans">
+<body>
 
-    <!-- Main Content Area -->
-    <main id="app-content" class="pb-24">
-        <!-- Content will be dynamically loaded here -->
-        <div class="p-4">
-            <h1 class="text-2xl font-bold">Loading...</h1>
+    <div id="app-container">
+        <!-- Pull to refresh indicator -->
+        <div id="pull-to-refresh">
+            <i data-lucide="arrow-down"></i> Release to refresh
         </div>
-    </main>
+
+        <!-- Main Content Area -->
+        <main id="app-content">
+            <!-- Content will be dynamically loaded here -->
+            <div style="text-align: center; padding-top: 50px;">
+                <h1 style="font-size: 1.5rem; font-weight: bold;">Loading SkyeUpload...</h1>
+            </div>
+        </main>
+    </div>
 
     <!-- Bottom Navigation Bar -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-gray-900 bg-opacity-80 backdrop-blur-md border-t border-gray-700">
-        <div class="flex justify-around max-w-screen-md mx-auto">
-            <a href="#home" class="nav-item active flex-1 text-center py-3">
+    <nav>
+        <div class="nav-wrapper">
+            <a href="#home" class="nav-item active">
                 <i data-lucide="home"></i>
-                <span class="text-xs block">Home</span>
+                <span>Home</span>
             </a>
-            <a href="#search" class="nav-item flex-1 text-center py-3">
+            <a href="#search" class="nav-item">
                 <i data-lucide="search"></i>
-                <span class="text-xs block">Search</span>
+                <span>Search</span>
             </a>
-            <a href="#requests" class="nav-item flex-1 text-center py-3">
+            <a href="#requests" class="nav-item">
                 <i data-lucide="plus-square"></i>
-                <span class="text-xs block">Request</span>
+                <span>Request</span>
             </a>
-            <a href="#settings" class="nav-item flex-1 text-center py-3">
+            <a href="#settings" class="nav-item">
                 <i data-lucide="settings"></i>
-                <span class="text-xs block">Settings</span>
+                <span>Settings</span>
             </a>
         </div>
     </nav>
