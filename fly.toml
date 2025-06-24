@@ -16,4 +16,4 @@ jobs:
       - uses: superfly/fly-pr-review-apps@1
         with:
           fly_api_token: ${{ secrets.FLY_API_TOKEN }}
-          fly_app_name: 'skyeupload-server' # Your Fly.io app name here
+          fly_app_name: 'skyeupload' # Your Fly.io app name here
