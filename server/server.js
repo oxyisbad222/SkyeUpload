@@ -12,25 +12,26 @@ const client = new WebTorrent();
 const PORT = process.env.PORT || 3000;
 
 // --- CORS Configuration ---
-// Define the list of allowed origins (your frontend URLs)
+// Define the list of allowed origins from your error logs
 const allowedOrigins = [
     'https://skye-upload-admin.vercel.app',
-    'https://skye-upload.vercel.app', // Add client URL
-    'http://localhost:8080', // for local testing
-    'http://127.0.0.1:8080'  // for local testing
+    'https://skye-upload.vercel.app' // Assuming this is your client's URL
 ];
 
 const corsOptions = {
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+            callback(new Error(msg), false);
         }
-        return callback(null, true);
     }
 };
+
+// Apply CORS middleware at the very top
+app.use(cors(corsOptions));
 
 // --- Persistent Storage Setup for Fly.io ---
 const dataDir = process.env.FLYSK_DATA_DIR || '/data';
@@ -85,7 +86,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // --- Middleware ---
-app.use(cors(corsOptions)); // Use the new CORS options
 app.use(express.json());
 
 // Serve static files from client, admin, and uploads directories
@@ -117,24 +117,18 @@ const addMediaToLibrary = (title, type, genre, filename) => {
     return newMedia;
 };
 
-
 // --- API ROUTES ---
+const apiRouter = express.Router();
 
 // Main endpoint for adding new content
-app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
+apiRouter.post('/admin/upload', upload.single('mediafile'), (req, res) => {
     const { title, type, genre, url, source_type } = req.body;
-
-    if (!title || !type) {
-        return res.status(400).json({ message: 'Title and media type are required.' });
-    }
-
+    if (!title || !type) return res.status(400).json({ message: 'Title and media type are required.' });
     if (source_type === 'file' && req.file) {
         try {
             const newMedia = addMediaToLibrary(title, type, genre, req.file.filename);
             return res.status(201).json({ message: 'File uploaded successfully!', media: newMedia });
-        } catch (error) {
-            return res.status(400).json({ message: error.message });
-        }
+        } catch (error) { return res.status(400).json({ message: error.message }); }
     } else if (source_type === 'magnet' && url) {
         console.log(`[WebTorrent] Received magnet link for: ${title}`);
         client.add(url, { path: uploadDir }, (torrent) => {
@@ -143,110 +137,50 @@ app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
             console.log(`[WebTorrent] Main file identified: ${file.name}`);
             torrent.on('done', () => {
                 console.log(`[WebTorrent] Download finished for ${file.name}.`);
-                try {
-                    addMediaToLibrary(title, type, genre, file.name);
-                } catch (error) {
-                    console.error(`[WebTorrent] Error adding to library: ${error.message}`);
-                }
+                addMediaToLibrary(title, type, genre, file.name);
             });
             torrent.on('error', (err) => console.error(`[WebTorrent] Error:`, err));
         });
-        return res.status(202).json({ message: `Download started for "${title}". It will be added to the library on completion.` });
+        return res.status(202).json({ message: `Download started for "${title}". It will be added on completion.` });
     } else {
-        return res.status(400).json({ message: 'Invalid request. Please provide a file or a magnet link.' });
+        return res.status(400).json({ message: 'Invalid request.' });
     }
 });
 
-
-// Endpoint to get the entire media library
-app.get('/api/media', (req, res) => {
-    res.json(mediaLibrary);
-});
-
-// Endpoint for streaming video files
-app.get('/api/stream/:fileName', (req, res) => {
-    const { fileName } = req.params;
-    const filePath = path.join(uploadDir, fileName);
-
-    if (!fs.existsSync(filePath)) {
-        return res.status(404).send('File not found');
-    }
-
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-
-    if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = (end - start) + 1;
-        const file = fs.createReadStream(filePath, { start, end });
-        const head = {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunksize,
-            'Content-Type': 'video/mp4',
-        };
-        res.writeHead(206, head);
-        file.pipe(res);
-    } else {
-        const head = {
-            'Content-Length': fileSize,
-            'Content-Type': 'video/mp4',
-        };
-        res.writeHead(200, head);
-        fs.createReadStream(filePath).pipe(res);
-    }
-});
-
-// Endpoint for clients to submit content requests
-app.post('/api/requests', (req, res) => {
+apiRouter.get('/media', (req, res) => res.json(mediaLibrary));
+apiRouter.get('/admin/requests', (req, res) => res.json(contentRequests));
+apiRouter.get('/admin/status', (req, res) => res.json({
+    status: 'online', uptime: `${Math.floor(process.uptime())}s`, version: '1.0.0',
+    requests_pending: contentRequests.length, torrents_active: client.torrents.length,
+    download_speed: (client.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s'
+}));
+apiRouter.post('/requests', (req, res) => {
     const { title, details } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
     const newRequest = { id: Date.now(), title, details, status: 'pending', timestamp: new Date().toISOString() };
     contentRequests.push(newRequest);
-    writeDb({ mediaLibrary, contentRequests }); // Persist changes
-    console.log('New content request received and DB updated:', newRequest);
+    writeDb({ mediaLibrary, contentRequests });
     res.status(201).json({ message: 'Request submitted successfully!', request: newRequest });
 });
 
-// Endpoint for the admin panel to view content requests
-app.get('/api/admin/requests', (req, res) => {
-    res.json(contentRequests);
-});
+// All API routes will be prefixed with /api
+app.use('/api', apiRouter);
 
-// Endpoint for the admin panel to check server status
-app.get('/api/admin/status', (req, res) => {
-    res.json({
-        status: 'online',
-        uptime: `${Math.floor(process.uptime())} seconds`,
-        version: '1.0.0',
-        requests_pending: contentRequests.length,
-        torrents_active: client.torrents.length,
-        download_speed: (client.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s'
-    });
-});
-
-
-// Catch-all route to serve the client's index.html for any other request
+// Catch-all route for the client SPA
 app.get(/^\/(?!admin).*/, (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'client', 'index.html'));
 });
 
-// --- Start Server & Graceful Shutdown ---
+// Start Server & Graceful Shutdown
 const server = app.listen(PORT, () => {
     console.log(`SkyeUpload server running on http://localhost:${PORT}`);
-    console.log(`Admin panel available at http://localhost:${PORT}/admin`);
     console.log(`Database is being stored in: ${dbPath}`);
 });
 
 process.on('SIGINT', () => {
     console.log('\nGracefully shutting down...');
-    server.close(() => {
-        client.destroy(() => {
-            console.log('WebTorrent client destroyed. Server shut down.');
-            process.exit(0);
-        });
-    });
+    server.close(() => client.destroy(() => {
+        console.log('Server shut down.');
+        process.exit(0);
+    }));
 });

@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
     
-    const API_URL = 'https://skyeupload.fly.dev/';
+    const API_URL = 'https://skyeupload.fly.dev/api'; // Correct URL, no trailing slash
 
     // --- RENDER FUNCTIONS ---
 

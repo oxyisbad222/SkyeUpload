@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
     // IMPORTANT: Make sure this URL is correct for your deployment
-    const API_URL = 'https://skyeupload.fly.dev/api'; // Example, replace with your actual URL
+    const API_URL = 'https://skyeupload.fly.dev/api'; 
     let mediaLibraryCache = null;
 
     // --- RENDER FUNCTIONS ---
