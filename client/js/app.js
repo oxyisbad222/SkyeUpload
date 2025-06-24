@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    const API_URL = 'https://skyeupload-server.fly.dev'; // Base URL of your backend
+    const API_URL = 'https://skyeupload.fly.dev'; // Base URL of your backend
     let mediaLibraryCache = null;
     let searchDebounceTimer;
 
