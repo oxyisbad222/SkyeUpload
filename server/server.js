@@ -4,10 +4,10 @@ const path =require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid'); // To generate unique filenames
+const { v4: uuidv4 } = require('uuid');
 
 // The server logic is wrapped in an async function
-// to allow for the dynamic, top-level import of WebTorrent.
+// to allow for the dynamic, top-level import of WebTorrent and node-fetch.
 async function startServer() {
     // Dynamically import the 'webtorrent' package which is an ES Module.
     const WebTorrent = (await import('webtorrent')).default;
@@ -77,7 +77,7 @@ async function startServer() {
     const upload = multer({ storage: storage });
 
     // --- Middleware & Helpers ---
-    app.use(express.json({ limit: '10mb' })); // Increase limit for batch links
+    app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     app.use('/uploads', express.static(uploadDir));
     const addMediaToLibrary = (mediaItem) => {
@@ -149,16 +149,11 @@ async function startServer() {
             const links = batch_links.split('\n').filter(link => link.trim() !== '');
             console.log(`[Batch] Received ${links.length} links for processing.`);
 
-            // Process each link in the background
             for (const link of links) {
-                // A simple way to guess the title is to look at the last part of the path
-                // This is highly unreliable and should be improved in a real app
                 let guessedTitle = 'Unknown Media';
                 try {
                      guessedTitle = path.basename(new URL(link).pathname).replace(/[\._]/g, ' ').replace(/\.mp4/i, '');
                 } catch {}
-
-                // We'll assume everything is a movie for now. This could be a UI option.
                 downloadFromLink(link, guessedTitle, 'movie');
             }
             return res.status(202).json({ message: `${links.length} links are being processed in the background.` });
@@ -196,8 +191,6 @@ async function startServer() {
         }
     });
 
-    // ... (rest of the API routes remain the same)
-    
     // STREAM TORRENT
     apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
         const torrent = client.get(req.params.infoHash);
