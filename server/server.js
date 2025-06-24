@@ -11,15 +11,17 @@ const app = express();
 const client = new WebTorrent();
 const PORT = process.env.PORT || 3000;
 
-// --- Persistent Storage Setup ---
-// Use an environment variable for the data directory, defaulting to the current directory
-const dataDir = process.env.RENDER_DISK_MOUNT_PATH || __dirname;
+// --- Persistent Storage Setup for Fly.io ---
+// Fly.io mounts volumes at '/data'. We'll use this path for persistent storage.
+// This environment variable is a placeholder and not set by Fly.io, the default to '/data' is what matters.
+const dataDir = process.env.FLYSK_DATA_DIR || '/data';
 const dbPath = path.join(dataDir, 'database.json');
 const uploadDir = path.join(dataDir, 'uploads');
 
 console.log(`Using data directory: ${dataDir}`);
 
 
+// --- Database Functions ---
 const readDb = () => {
     try {
         if (fs.existsSync(dbPath)) {
@@ -28,6 +30,10 @@ const readDb = () => {
         }
         // If DB doesn't exist, create it with a default structure
         const defaultDb = { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [] };
+        // Ensure the data directory exists before writing the initial DB
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
         fs.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2));
         return defaultDb;
     } catch (error) {
@@ -47,6 +53,10 @@ const writeDb = (data) => {
 // Load initial data from DB
 let { mediaLibrary, contentRequests } = readDb();
 
+// --- Ensure Uploads Directory Exists ---
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // --- Multer Configuration ---
 const storage = multer.diskStorage({
@@ -62,7 +72,7 @@ const upload = multer({ storage: storage });
 app.use(cors());
 app.use(express.json());
 
-// Serve static files
+// Serve static files from client, admin, and uploads directories
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
 app.use('/uploads', express.static(uploadDir));
@@ -86,13 +96,14 @@ const addMediaToLibrary = (title, type, genre, filename) => {
         throw new Error('Invalid media type specified.');
     }
     
-    writeDb({ mediaLibrary, contentRequests }); // Persist changes
+    writeDb({ mediaLibrary, contentRequests }); // Persist changes to the database file
     console.log('New media added and DB updated:', newMedia);
     return newMedia;
 };
 
 // --- API ROUTES ---
 
+// Main endpoint for adding new content via file upload or magnet link
 app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
     const { title, type, genre, url, source_type } = req.body;
 
@@ -129,10 +140,12 @@ app.post('/api/admin/upload', upload.single('mediafile'), (req, res) => {
     }
 });
 
+// Endpoint to get the entire media library
 app.get('/api/media', (req, res) => {
     res.json(mediaLibrary);
 });
 
+// Endpoint for clients to submit content requests
 app.post('/api/requests', (req, res) => {
     const { title, details } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
@@ -143,10 +156,12 @@ app.post('/api/requests', (req, res) => {
     res.status(201).json({ message: 'Request submitted successfully!', request: newRequest });
 });
 
+// Endpoint for the admin panel to view content requests
 app.get('/api/admin/requests', (req, res) => {
     res.json(contentRequests);
 });
 
+// Endpoint for the admin panel to check server status
 app.get('/api/admin/status', (req, res) => {
     res.json({
         status: 'online',
@@ -158,6 +173,7 @@ app.get('/api/admin/status', (req, res) => {
     });
 });
 
+// Catch-all route to serve the client's index.html for any other request
 app.get(/^\/(?!admin).*/, (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'client', 'index.html'));
 });
