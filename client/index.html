@@ -10,63 +10,55 @@
     <meta name="apple-mobile-web-app-title" content="SkyeUpload">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     
+    <!-- Fallback for other browsers -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#111827">
+    <meta name="theme-color" content="#1a1a1a">
 
     <title>SkyeUpload</title>
 
-    <!-- Plyr.io Player CSS -->
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-
-    <!-- Stylesheet -->
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="css/style.css">
     
-    <!-- Icons -->
+    <!-- Fonts and Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+
 </head>
-<body>
+<body class="bg-black text-white font-sans">
 
-    <div id="app-container">
-        <!-- Pull to refresh indicator -->
-        <div id="pull-to-refresh">
-            <i data-lucide="arrow-down"></i> Release to refresh
+    <!-- Main Content Area -->
+    <main id="app-content" class="pb-24">
+        <!-- Content will be dynamically loaded here -->
+        <div class="p-4">
+            <h1 class="text-2xl font-bold">Loading...</h1>
         </div>
-
-        <!-- Main Content Area -->
-        <main id="app-content">
-            <!-- Content will be dynamically loaded here -->
-            <div style="text-align: center; padding-top: 50px;">
-                <h1 style="font-size: 1.5rem; font-weight: bold;">Loading SkyeUpload...</h1>
-            </div>
-        </main>
-    </div>
+    </main>
 
     <!-- Bottom Navigation Bar -->
-    <nav>
-        <div class="nav-wrapper">
-            <a href="#home" class="nav-item active">
+    <nav class="fixed bottom-0 left-0 right-0 bg-gray-900 bg-opacity-80 backdrop-blur-md border-t border-gray-700">
+        <div class="flex justify-around max-w-screen-md mx-auto">
+            <a href="#home" class="nav-item active flex-1 text-center py-3">
                 <i data-lucide="home"></i>
-                <span>Home</span>
+                <span class="text-xs block">Home</span>
             </a>
-            <a href="#search" class="nav-item">
+            <a href="#search" class="nav-item flex-1 text-center py-3">
                 <i data-lucide="search"></i>
-                <span>Search</span>
+                <span class="text-xs block">Search</span>
             </a>
-            <a href="#requests" class="nav-item">
+            <a href="#requests" class="nav-item flex-1 text-center py-3">
                 <i data-lucide="plus-square"></i>
-                <span>Request</span>
+                <span class="text-xs block">Request</span>
             </a>
-            <a href="#settings" class="nav-item">
+            <a href="#settings" class="nav-item flex-1 text-center py-3">
                 <i data-lucide="settings"></i>
-                <span>Settings</span>
+                <span class="text-xs block">Settings</span>
             </a>
         </div>
     </nav>
 
-    <!-- Plyr.io Player JS -->
-    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
-    
-    <!-- Application JavaScript -->
+    <!-- JavaScript -->
     <script src="js/app.js"></script>
 </body>
 </html>
