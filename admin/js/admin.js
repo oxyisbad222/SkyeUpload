@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
-    const API_URL = 'https://skyeupload-server.fly.dev/api';
+    const API_URL = 'https://skyeupload.fly.dev/api';
     let statusInterval;
 
     // --- RENDER FUNCTIONS ---
