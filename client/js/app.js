@@ -4,44 +4,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const navItems = document.querySelectorAll('.nav-item');
     const API_URL = 'https://skyeupload-server.fly.dev'; // Base URL of your backend
     let mediaLibraryCache = null;
+    let searchDebounceTimer;
 
     // --- Pull To Refresh Logic ---
     const pptr = document.getElementById('pull-to-refresh');
     let touchstartY = 0;
-    // Listen for the start of a touch on the screen
     document.body.addEventListener('touchstart', e => {
-        // Only track touch if user is at the very top of the page
-        if (window.scrollY === 0) {
-            touchstartY = e.touches[0].clientY;
-        }
+        if (window.scrollY === 0) touchstartY = e.touches[0].clientY;
     }, { passive: true });
-    // Listen as the user drags their finger
     document.body.addEventListener('touchmove', e => {
         const touchY = e.touches[0].clientY;
         const touchDiff = touchY - touchstartY;
-        // If they are at the top and have pulled down more than a set threshold (e.g., 80px)
         if (window.scrollY === 0 && touchDiff > 80) {
-            pptr.style.opacity = '1'; // Make the "refresh" text visible
+            pptr.style.opacity = '1';
         }
     }, { passive: true });
-    // Listen for when the user lifts their finger
-    document.body.addEventListener('touchend', e => {
-        // If the refresh text was visible, it means a refresh was triggered
+    document.body.addEventListener('touchend', () => {
         if (pptr.style.opacity === '1') {
-            pptr.style.opacity = '0'; // Hide the text again
-            refreshMedia(); // Call the refresh function
+            pptr.style.opacity = '0';
+            refreshMedia();
         }
     });
     
     // --- Refresh Data ---
     async function refreshMedia() {
         console.log("Refreshing media library...");
-        mediaLibraryCache = null; // Clear the cache
-        // If the user is on the home screen, re-render it with fresh data
+        mediaLibraryCache = null;
         if (window.location.hash === '' || window.location.hash === '#home') {
             await renderHome();
         }
     }
+
+    // --- Helper to create media item HTML ---
+    const createMediaHtml = (item) => `
+        <div class="media-item" data-id="${item.id}" data-type="${item.type}">
+            <img src="${item.poster_path ? 'https://image.tmdb.org/t/p/w500' + item.poster_path : 'https://placehold.co/500x750/1f2937/9ca3af?text=' + encodeURIComponent(item.title)}" alt="${item.title}" loading="lazy">
+        </div>`;
 
     // --- RENDER FUNCTIONS ---
     const renderHome = async () => {
@@ -53,11 +51,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  mediaLibraryCache = await response.json();
             }
            
-            const createMediaHtml = (item) => `
-                <div class="media-item" data-id="${item.id}" data-type="${item.type}">
-                    <img src="${item.poster_path ? 'https://image.tmdb.org/t/p/w500' + item.poster_path : 'https://placehold.co/500x750/1f2937/9ca3af?text=' + encodeURIComponent(item.title)}" alt="${item.title}" loading="lazy">
-                </div>`;
-
             content.innerHTML = `
                 <h1 class="text-3xl font-bold mb-6">Home</h1>
                 <div class="space-y-8">
@@ -73,10 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to render home:", error);
             mediaLibraryCache = null;
-            content.innerHTML = `<div class="p-4 bg-red-900 text-red-200 rounded-lg text-center">
-                <p class="font-bold">Connection Error</p>
-                <p class="text-sm">${error.message} Please pull down to refresh.</p>
-            </div>`;
+            content.innerHTML = `<div class="p-4 bg-red-900 text-red-200 rounded-lg text-center"><p class="font-bold">Connection Error</p><p class="text-sm">${error.message} Please pull down to refresh.</p></div>`;
         }
     };
 
@@ -84,10 +74,52 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `
             <h1 class="text-3xl font-bold mb-6">Search</h1>
             <div class="relative">
-                <input type="text" placeholder="Search for movies, shows..." class="w-full">
+                <input type="search" id="search-input" placeholder="Search your library..." class="w-full">
                 <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"></i>
-            </div>`;
+            </div>
+            <div id="search-results" class="mt-8"></div>
+        `;
         lucide.createIcons();
+
+        const searchInput = document.getElementById('search-input');
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                performSearch(searchInput.value);
+            }, 300); // Debounce for 300ms
+        });
+    };
+    
+    const performSearch = async (query) => {
+        const resultsContainer = document.getElementById('search-results');
+        if (!query || query.trim() === '') {
+            resultsContainer.innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
+            if (!response.ok) throw new Error('Search failed');
+            const results = await response.json();
+
+            if (results.movies.length === 0 && results.tvShows.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-gray-400 text-center">No results found.</p>';
+                return;
+            }
+
+            resultsContainer.innerHTML = `
+                ${results.movies.length > 0 ? `
+                    <h2 class="text-xl font-semibold mb-4">Movies</h2>
+                    <div class="media-grid">${results.movies.map(createMediaHtml).join('')}</div>
+                ` : ''}
+                ${results.tvShows.length > 0 ? `
+                    <h2 class="text-xl font-semibold mt-8 mb-4">TV Shows</h2>
+                    <div class="media-grid">${results.tvShows.map(createMediaHtml).join('')}</div>
+                ` : ''}
+            `;
+        } catch (error) {
+            resultsContainer.innerHTML = '<p class="text-red-400 text-center">Error performing search.</p>';
+        }
     };
     
     const renderRequests = () => {
@@ -106,12 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <h1 class="text-3xl font-bold mb-6">Settings</h1>
              <div class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <p class="text-sm">App Version: 1.0.1</p>
+                    <p class="text-sm">App Version: 1.0.2</p>
                     <p class="text-xs text-gray-400 mt-1">Developed by Skye</p>
                 </div>
             </div>`;
     };
-
 
     // --- MODALS AND PLAYER ---
     function showDetailsView(item) {
@@ -148,11 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showVideoPlayer(item) {
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
-        
-        // Correctly construct the video source URL based on the stream type
-        const videoSrc = (item.streamType === 'file')
-            ? `${API_URL}${item.filePath}` // For files: https://server.com/uploads/file.mp4
-            : `${API_URL}${item.filePath}`; // For torrents: https://server.com/api/stream/hash/index
+        const videoSrc = `${API_URL}${item.filePath}`;
 
         modal.innerHTML = `
             <div class="modal-content">
@@ -175,8 +202,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaItemEl = e.target.closest('.media-item');
         if (mediaItemEl) {
             const { id, type } = mediaItemEl.dataset;
-            const library = type === 'movie' ? mediaLibraryCache.movies : mediaLibraryCache.tvShows;
-            const item = library.find(i => i.id == id);
+            // Search results might not be from the main cache, so we need to find the item
+            // in the full library cache if it exists.
+            let item;
+            if (mediaLibraryCache) {
+                 const library = type === 'movie' ? mediaLibraryCache.movies : mediaLibraryCache.tvShows;
+                 item = library.find(i => i.id == id);
+            }
             if (item) showDetailsView(item);
         }
     });
