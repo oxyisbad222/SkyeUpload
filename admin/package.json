@@ -1,0 +1,8 @@
+{
+  "name": "skyeupload-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Admin panel for the SkyeUpload personal media suite.",
+  "author": "Skye",
+  "license": "MIT"
+}

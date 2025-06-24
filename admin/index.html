@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyeUpload - Admin Panel</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom Styles -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-link {
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+        }
+        .sidebar-link.active {
+            background-color: #4f46e5; /* indigo-600 */
+        }
+        .sidebar-link:not(.active):hover {
+            background-color: #374151; /* gray-700 */
+        }
+    </style>
+</head>
+<body class="h-full text-gray-200">
+
+<div class="flex h-full">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 p-4 flex flex-col">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-white">Skye<span class="text-indigo-400">Upload</span></h1>
+            <p class="text-sm text-gray-400">Admin Panel</p>
+        </div>
+        <nav class="flex-grow">
+            <ul>
+                <li><a href="#upload" class="sidebar-link active block rounded-md py-2 px-3 font-medium">Upload Content</a></li>
+                <li><a href="#requests" class="sidebar-link block rounded-md py-2 px-3 font-medium mt-1">Manage Requests</a></li>
+                <li><a href="#status" class="sidebar-link block rounded-md py-2 px-3 font-medium mt-1">Server Status</a></li>
+            </ul>
+        </nav>
+        <div class="text-xs text-gray-500">
+            <p>&copy; 2024 Developed by Skye</p>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="admin-content" class="flex-1 p-8 overflow-y-auto">
+        <!-- Content will be dynamically loaded here -->
+        <h2 class="text-3xl font-bold text-white">Loading...</h2>
+    </main>
+</div>
+
+<!-- Main JS File for Admin Logic -->
+<script src="js/admin.js"></script>
+</body>
+</html>
