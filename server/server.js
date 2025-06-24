@@ -17,6 +17,20 @@ async function startServer() {
     const PORT = process.env.PORT || 3000;
     const TMDB_API_KEY = process.env.TMDB_API_KEY; // Get API key from environment
 
+    // --- Public Trackers List ---
+    // A curated list of public trackers to improve peer discovery.
+    const trackers = [
+        'udp://tracker.opentrackr.org:1337/announce',
+        'udp://open.demonii.com:1337/announce',
+        'udp://tracker.openbittorrent.com:6969/announce',
+        'udp://tracker.torrent.eu.org:451/announce',
+        'udp://tracker.moeking.me:6969/announce',
+        'udp://p4p.arenabg.com:1337/announce',
+        'udp://exodus.desync.com:6969/announce',
+        'https://opentracker.i2p.rocks:443/announce',
+    ];
+
+
     // --- CORS Configuration ---
     const allowedOrigins = [
         'https://skye-upload-admin.vercel.app',
@@ -115,7 +129,11 @@ async function startServer() {
             });
             return res.status(201).json({ message: 'File uploaded successfully!'});
         } else if (source_type === 'magnet' && url) {
-            client.add(url, { path: uploadDir }, (torrent) => {
+            const torrentOptions = {
+                path: uploadDir,
+                announce: trackers // Add our tracker list to the options
+            };
+            client.add(url, torrentOptions, (torrent) => {
                 const file = torrent.files.reduce((a, b) => a.length > b.length ? a : b);
                 const fileIndex = torrent.files.indexOf(file);
                 addMediaToLibrary({
