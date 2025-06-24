@@ -303,7 +303,10 @@ async function startServer() {
         });
     }, 1000 * 60 * 5);
 
-    const server = app.listen(PORT, () => console.log(`SkyeUpload server running on http://localhost:${PORT}`));
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`SkyeUpload server running on http://localhost:${PORT}`);
+    });
+    
     process.on('SIGINT', () => server.close(() => client.destroy(() => process.exit(0))));
 }
 
