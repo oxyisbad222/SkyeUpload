@@ -1,19 +1,26 @@
-# .github/workflows/main.yml
+# fly.toml app configuration file generated for skyeupload on 2025-06-24T03:18:04-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-name: Fly Deploy
+app = 'skyeupload'
+primary_region = 'ord'
 
-on:
-  push:
-    branches:
-      - main # Or whatever your main branch is
+[build]
 
-jobs:
-  deploy:
-    name: Deploy app
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: superfly/fly-pr-review-apps@1
-        with:
-          fly_api_token: ${{ secrets.FLY_API_TOKEN }}
-          fly_app_name: 'skyeupload' # Your Fly.io app name here
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  
+[mounts]
+  source="skye_data"
+  destination="/data"
