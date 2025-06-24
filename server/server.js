@@ -133,7 +133,7 @@ async function startServer() {
 
             torrent.on('error', (err) => {
                 console.error(`[WebTorrent] Error for torrent "${title}":`, err.message);
-                client.remove(torrent.infoHash); // Clean up failed torrent
+                client.remove(torrent.infoHash);
             });
 
             torrent.on('ready', () => {
@@ -188,6 +188,23 @@ async function startServer() {
     // GET ALL MEDIA
     apiRouter.get('/media', (req, res) => res.json(mediaLibrary));
 
+    // SEARCH MEDIA
+    apiRouter.get('/search', (req, res) => {
+        const query = (req.query.q || '').toLowerCase().trim();
+        if (!query) {
+            return res.json({ movies: [], tvShows: [] });
+        }
+
+        const filteredMovies = mediaLibrary.movies.filter(movie => 
+            movie.title.toLowerCase().includes(query)
+        );
+        const filteredTvShows = mediaLibrary.tvShows.filter(show => 
+            show.title.toLowerCase().includes(query)
+        );
+
+        res.json({ movies: filteredMovies, tvShows: filteredTvShows });
+    });
+
     // MANAGE REQUESTS
     apiRouter.get('/admin/requests', (req, res) => res.json(contentRequests));
     apiRouter.delete('/admin/requests/:id', (req, res) => {
@@ -240,7 +257,6 @@ async function startServer() {
         
         client.torrents.forEach(torrent => {
             const mediaItem = mediaLibrary.movies.find(m => m.infoHash === torrent.infoHash) || mediaLibrary.tvShows.find(t => t.infoHash === torrent.infoHash);
-            // If the torrent is done and hasn't been added for a while, remove it to save resources
             if (torrent.done && mediaItem && (now - mediaItem.addedAt > INACTIVE_TIME)) {
                  console.log(`[GC] Destroying inactive downloaded torrent: ${torrent.name}`);
                  client.remove(torrent.infoHash);
