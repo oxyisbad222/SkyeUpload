@@ -72,7 +72,6 @@ async function startServer() {
     app.use(express.json());
     app.use('/uploads', express.static(uploadDir));
     const addMediaToLibrary = (mediaItem) => {
-        // Prevent duplicates by title
         const library = mediaItem.type === 'movie' ? mediaLibrary.movies : mediaLibrary.tvShows;
         if (library.some(item => item.title.toLowerCase() === mediaItem.title.toLowerCase())) {
              console.log(`Duplicate found for "${mediaItem.title}". Skipping.`);
@@ -87,23 +86,15 @@ async function startServer() {
     async function fetchTmdbMetadata(title, type) {
         if (!TMDB_API_KEY) {
             console.log("TMDB_API_KEY not set. Using placeholder metadata.");
-            return {
-                poster_path: null,
-                overview: "No metadata available.",
-                release_date: "N/A"
-            };
+            return { poster_path: null, overview: "No metadata available.", release_date: "N/A" };
         }
         const searchType = type === 'movie' ? 'movie' : 'tv';
         const url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`;
         try {
             const response = await fetch(url);
             const data = await response.json();
-            if (data.results && data.results.length > 0) {
-                return data.results[0]; // Return the first result
-            }
-        } catch (error) {
-            console.error("TMDB fetch error:", error);
-        }
+            if (data.results && data.results.length > 0) return data.results[0];
+        } catch (error) { console.error("TMDB fetch error:", error); }
         return null;
     }
 
@@ -114,10 +105,7 @@ async function startServer() {
     apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
         const { title, type, genre, url, source_type } = req.body;
         if (!title || !type) return res.status(400).json({ message: 'Title and type are required.' });
-
         const metadata = await fetchTmdbMetadata(title, type);
-
-        // File Upload
         if (source_type === 'file' && req.file) {
             addMediaToLibrary({
                 id: Date.now(), title, type, genre: genre || "Uncategorized",
@@ -126,11 +114,8 @@ async function startServer() {
                 filePath: `/uploads/${req.file.filename}`, streamType: 'file'
             });
             return res.status(201).json({ message: 'File uploaded successfully!'});
-        
-        // Magnet Link
         } else if (source_type === 'magnet' && url) {
             client.add(url, { path: uploadDir }, (torrent) => {
-                console.log(`[WebTorrent] Metadata received for: ${torrent.name}`);
                 const file = torrent.files.reduce((a, b) => a.length > b.length ? a : b);
                 const fileIndex = torrent.files.indexOf(file);
                 addMediaToLibrary({
@@ -150,13 +135,10 @@ async function startServer() {
 
     // STREAM TORRENT
     apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
-        const { infoHash, fileIndex } = req.params;
-        const torrent = client.get(infoHash);
+        const torrent = client.get(req.params.infoHash);
         if (!torrent) return res.status(404).send('Torrent not found.');
-        const file = torrent.files[parseInt(fileIndex, 10)];
+        const file = torrent.files[parseInt(req.params.fileIndex, 10)];
         if (!file) return res.status(404).send('File not found in torrent.');
-
-        console.log(`[Stream] Streaming ${file.name}`);
         const range = req.headers.range;
         const fileSize = file.length;
         const head = { 'Content-Length': fileSize, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes' };
@@ -164,9 +146,8 @@ async function startServer() {
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-            const chunksize = (end - start) + 1;
             head['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
-            head['Content-Length'] = chunksize;
+            head['Content-Length'] = (end - start) + 1;
             res.writeHead(206, head);
             file.createReadStream({ start, end }).pipe(res);
         } else {
@@ -207,15 +188,14 @@ async function startServer() {
     // GET SERVER STATUS
     apiRouter.get('/admin/status', (req, res) => {
         const torrents = client.torrents.map(t => ({
-            name: t.name,
-            infoHash: t.infoHash,
-            progress: (t.progress * 100).toFixed(2),
-            downloadSpeed: (t.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s',
-            peers: t.numPeers
+            name: t.name, infoHash: t.infoHash, progress: (t.progress * 100).toFixed(2),
+            downloadSpeed: (t.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s', peers: t.numPeers
         }));
         res.json({
             status: 'online', uptime: `${Math.floor(process.uptime())}s`, version: '1.0.0',
             requests_pending: contentRequests.length,
+            movies_hosted: mediaLibrary.movies.length,
+            shows_hosted: mediaLibrary.tvShows.length,
             torrents_active: client.torrents.length,
             total_download_speed: (client.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s',
             torrents
