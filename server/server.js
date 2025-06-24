@@ -14,6 +14,10 @@ async function startServer() {
     const PORT = process.env.PORT || 3000;
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
+    if (!TMDB_API_KEY) {
+        console.warn('WARNING: TMDB_API_KEY is not set. Metadata fetching will be disabled.');
+    }
+
     const trackers = [
         'udp://tracker.opentrackr.org:1337/announce',
         'udp://open.demonii.com:1337/announce',
@@ -35,7 +39,8 @@ async function startServer() {
                 callback(new Error('Not allowed by CORS'));
             }
         },
-        methods: ['GET', 'POST', 'PUT', 'DELETE']
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        optionsSuccessStatus: 204
     };
     app.use(cors(corsOptions));
 
@@ -292,16 +297,58 @@ async function startServer() {
     
     app.use('/api', apiRouter);
 
+    // --- Improved Torrent Cleanup ---
     setInterval(() => {
-        const now = Date.now();
-        const INACTIVE_TIME = 1000 * 60 * 30;
+        console.log('[Maintenance] Checking for completed torrents to remove...');
+        const torrentsToRemove = [];
         client.torrents.forEach(torrent => {
-            const mediaItem = mediaLibrary.movies.find(m => m.infoHash === torrent.infoHash) || mediaLibrary.tvShows.find(t => t.infoHash === torrent.infoHash);
-            if (torrent.done && mediaItem && (now - mediaItem.addedAt > INACTIVE_TIME)) {
-                 client.remove(torrent.infoHash);
+            if (torrent.done) {
+                // If the torrent is done, mark it with a timestamp
+                if (!torrent.doneTimestamp) {
+                    torrent.doneTimestamp = Date.now();
+                }
+
+                // If it has been 'done' for more than the grace period, remove it
+                if (Date.now() - torrent.doneTimestamp > (1000 * 60 * 30)) { // 30 min grace period
+                    torrentsToRemove.push(torrent);
+                }
             }
         });
-    }, 1000 * 60 * 5);
+
+        if (torrentsToRemove.length > 0) {
+            console.log(`[Maintenance] Found ${torrentsToRemove.length} torrent(s) to remove.`);
+            let dbChanged = false;
+            torrentsToRemove.forEach(torrent => {
+                console.log(`[Maintenance] Removing torrent: ${torrent.name} (${torrent.infoHash})`);
+
+                // Remove from webtorrent client
+                client.remove(torrent.infoHash, (err) => {
+                    if (err) console.error(`[Maintenance] Error removing torrent: ${err.message}`);
+                });
+
+                // Remove from database by filtering
+                const movieCount = mediaLibrary.movies.length;
+                const showCount = mediaLibrary.tvShows.length;
+                mediaLibrary.movies = mediaLibrary.movies.filter(m => m.infoHash !== torrent.infoHash);
+                mediaLibrary.tvShows = mediaLibrary.tvShows.filter(t => t.infoHash !== torrent.infoHash);
+
+                if (mediaLibrary.movies.length < movieCount || mediaLibrary.tvShows.length < showCount) {
+                    dbChanged = true;
+                }
+            });
+            
+            // Write the updated DB to disk if any items were removed
+            if (dbChanged) {
+                writeDb({ mediaLibrary, contentRequests });
+            }
+        }
+    }, 1000 * 60 * 5); // Check every 5 minutes
+
+    // --- Global Error Handler ---
+    app.use((err, req, res, next) => {
+        console.error("Unhandled error caught:", err);
+        res.status(500).json({ message: 'An unexpected server error occurred.', error: err.message });
+    });
 
     const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`SkyeUpload server running on http://localhost:${PORT}`);
