@@ -11,8 +11,14 @@ const app = express();
 const client = new WebTorrent();
 const PORT = process.env.PORT || 3000;
 
-// --- Database Setup ---
-const dbPath = path.join(__dirname, 'database.json');
+// --- Persistent Storage Setup ---
+// Use an environment variable for the data directory, defaulting to the current directory
+const dataDir = process.env.RENDER_DISK_MOUNT_PATH || __dirname;
+const dbPath = path.join(dataDir, 'database.json');
+const uploadDir = path.join(dataDir, 'uploads');
+
+console.log(`Using data directory: ${dataDir}`);
+
 
 const readDb = () => {
     try {
@@ -41,11 +47,6 @@ const writeDb = (data) => {
 // Load initial data from DB
 let { mediaLibrary, contentRequests } = readDb();
 
-// --- Setup Uploads Directory ---
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
 
 // --- Multer Configuration ---
 const storage = multer.diskStorage({
