@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
-    const API_URL = 'https://skyeupload.fly.dev/api';
+    const API_URL = 'https://skyeupload-server.fly.dev/api';
     let statusInterval;
 
     // --- RENDER FUNCTIONS ---
@@ -91,17 +91,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
             content.innerHTML = `
                 <h2 class="text-3xl font-bold text-white mb-6">Server Status</h2>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div class="bg-gray-800 p-6 rounded-lg"><h3 class="text-gray-400">Status</h3><p class="text-2xl font-semibold text-green-400">Online</p></div>
-                    <div class="bg-gray-800 p-6 rounded-lg"><h3 class="text-gray-400">Uptime</h3><p class="text-2xl font-semibold">${status.uptime}</p></div>
-                    <div class="bg-gray-800 p-6 rounded-lg"><h3 class="text-gray-400">DL Speed</h3><p class="text-2xl font-semibold">${status.total_download_speed}</p></div>
-                    <div class="bg-gray-800 p-6 rounded-lg"><h3 class="text-gray-400">Requests</h3><p class="text-2xl font-semibold">${status.requests_pending}</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-gray-400">Status</h3>
+                        <p class="text-2xl font-semibold text-green-400">Online</p>
+                    </div>
+                     <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-gray-400">Files Hosted</h3>
+                        <p class="text-2xl font-semibold">${status.movies_hosted} <span class="text-lg text-gray-400">Movies</span></p>
+                        <p class="text-2xl font-semibold">${status.shows_hosted} <span class="text-lg text-gray-400">Shows</span></p>
+                    </div>
+                     <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-gray-400">Content Requests</h3>
+                        <p class="text-2xl font-semibold">${status.requests_pending}</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="text-gray-400">DL Speed</h3>
+                        <p class="text-2xl font-semibold">${status.total_download_speed}</p>
+                    </div>
                 </div>
                 <h3 class="text-2xl font-bold text-white mb-4">Active Torrents (${status.torrents_active})</h3>
                 <div class="space-y-4">${torrentsHtml || '<p class="text-gray-400">No active torrents.</p>'}</div>`;
         } catch (error) {
             console.error("Status fetch error:", error);
-            // Optionally show a disconnected state
+             content.innerHTML = `
+                <h2 class="text-3xl font-bold text-white mb-6">Server Status</h2>
+                <div class="bg-red-900 text-red-200 p-4 rounded-lg">
+                    <p class="font-bold">Server Offline</p>
+                    <p>Could not connect to the server. It may be restarting or experiencing an issue.</p>
+                </div>`;
         }
     };
     
@@ -122,10 +140,12 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(statusInterval); // Clear interval when changing pages
         const hash = window.location.hash || '#upload';
         const renderFunc = routes[hash] || renderUpload;
+        
+        // Initial blank render to avoid content flash
+        content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading...</h2>`;
         renderFunc();
 
         if (hash === '#status') {
-            renderStatus(); // Initial render
             statusInterval = setInterval(renderStatus, 2000); // Refresh status every 2 seconds
         }
         updateActiveLink(hash);
