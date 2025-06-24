@@ -1,6 +1,6 @@
 // Import required modules
 const express = require('express');
-const path = require('path');
+const path =require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
@@ -79,19 +79,19 @@ async function startServer() {
     app.use('/uploads', express.static(uploadDir));
 
     // --- Helper ---
-    const addMediaToLibrary = (title, type, genre, filename) => {
-        const newMedia = {
-            id: Date.now(), title, genre: genre || "Uncategorized",
-            thumbnail: 'https://placehold.co/400x600/3a3a3a/ffffff?text=' + encodeURIComponent(title),
-            filePath: `/uploads/${filename}`
-        };
-        if (type === 'movie') mediaLibrary.movies.push(newMedia);
-        else if (type === 'tvShow') mediaLibrary.tvShows.push(newMedia);
-        else throw new Error('Invalid media type');
+    const addMediaToLibrary = (mediaItem) => {
+        if (mediaItem.type === 'movie') {
+            mediaLibrary.movies.push(mediaItem);
+        } else if (mediaItem.type === 'tvShow') {
+            mediaLibrary.tvShows.push(mediaItem);
+        } else {
+            throw new Error('Invalid media type');
+        }
         writeDb({ mediaLibrary, contentRequests });
-        console.log('New media added:', newMedia);
-        return newMedia;
+        console.log('New media added:', mediaItem);
+        return mediaItem;
     };
+
 
     // --- API Router ---
     const apiRouter = express.Router();
@@ -99,24 +99,96 @@ async function startServer() {
     apiRouter.post('/admin/upload', upload.single('mediafile'), (req, res) => {
         const { title, type, genre, url, source_type } = req.body;
         if (!title || !type) return res.status(400).json({ message: 'Title and type are required.' });
+        
+        // --- File Upload Logic ---
         if (source_type === 'file' && req.file) {
             try {
-                const newMedia = addMediaToLibrary(title, type, genre, req.file.filename);
+                const newMedia = {
+                    id: Date.now(), title, type, genre: genre || "Uncategorized",
+                    thumbnail: 'https://placehold.co/400x600/3a3a3a/ffffff?text=' + encodeURIComponent(title),
+                    filePath: `/uploads/${req.file.filename}`, // Path to the static file
+                    streamType: 'file'
+                };
+                addMediaToLibrary(newMedia);
                 return res.status(201).json({ message: 'File uploaded successfully!', media: newMedia });
             } catch (error) { return res.status(400).json({ message: error.message }); }
+        
+        // --- Magnet Link Logic ---
         } else if (source_type === 'magnet' && url) {
+            // Add the torrent to the client
             client.add(url, { path: uploadDir }, (torrent) => {
-                console.log(`[WebTorrent] Started: ${torrent.name}`);
-                const file = torrent.files.find(f => f.name.endsWith('.mp4') || f.name.endsWith('.mkv')) || torrent.files.reduce((a, b) => a.length > b.length ? a : b);
+                console.log(`[WebTorrent] Metadata received for: ${torrent.name}`);
+                
+                // Find the largest file in the torrent (usually the video)
+                const file = torrent.files.reduce((a, b) => a.length > b.length ? a : b);
+                const fileIndex = torrent.files.indexOf(file);
+
+                console.log(`[WebTorrent] Identified main file: ${file.name} at index ${fileIndex}`);
+
+                // Instantly add the media to the library for streaming
+                const newMedia = {
+                    id: Date.now(), title, type, genre: genre || "Uncategorized",
+                    thumbnail: 'https://placehold.co/400x600/3a3a3a/ffffff?text=' + encodeURIComponent(title),
+                    filePath: `/api/stream/${torrent.infoHash}/${fileIndex}`, // Special streaming path
+                    streamType: 'torrent',
+                    infoHash: torrent.infoHash,
+                    fileIndex: fileIndex
+                };
+                addMediaToLibrary(newMedia);
+
                 torrent.on('done', () => {
-                    console.log(`[WebTorrent] Finished: ${file.name}.`);
-                    addMediaToLibrary(title, type, genre, file.name);
+                    console.log(`[WebTorrent] Download finished for: ${file.name}.`);
+                    // Optionally update the DB entry to note that it's fully downloaded
                 });
                 torrent.on('error', (err) => console.error(`[WebTorrent] Error:`, err));
             });
-            return res.status(202).json({ message: `Download started for "${title}".` });
+            return res.status(202).json({ message: `"${title}" is being processed and will be available to stream shortly.` });
         } else {
             return res.status(400).json({ message: 'Invalid request.' });
+        }
+    });
+
+    // --- New Torrent Streaming Endpoint ---
+    apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
+        const { infoHash, fileIndex } = req.params;
+        const torrent = client.get(infoHash);
+
+        if (!torrent) {
+            return res.status(404).send('Torrent not found or not ready.');
+        }
+
+        const file = torrent.files[parseInt(fileIndex, 10)];
+        if (!file) {
+            return res.status(404).send('File not found in torrent.');
+        }
+
+        console.log(`[Stream] Streaming ${file.name} for infoHash ${infoHash}`);
+
+        const range = req.headers.range;
+        const fileSize = file.length;
+
+        const head = {
+            'Content-Length': fileSize,
+            'Content-Type': 'video/mp4',
+            'Accept-Ranges': 'bytes'
+        };
+
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+
+            head['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
+            head['Content-Length'] = chunksize;
+
+            res.writeHead(206, head); // 206 Partial Content
+            const stream = file.createReadStream({ start, end });
+            stream.pipe(res);
+        } else {
+            res.writeHead(200, head); // 200 OK
+            const stream = file.createReadStream();
+            stream.pipe(res);
         }
     });
 
