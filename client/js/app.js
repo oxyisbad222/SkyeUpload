@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const API_URL = 'https://skyeupload.fly.dev'; // Base URL of your backend
     let mediaLibraryCache = null;
     let searchDebounceTimer;
+    let activePlayer = null;
 
     // --- Pull To Refresh Logic ---
     const pptr = document.getElementById('pull-to-refresh');
@@ -86,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = setTimeout(() => {
                 performSearch(searchInput.value);
-            }, 300); // Debounce for 300ms
+            }, 300);
         });
     };
     
@@ -108,14 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             resultsContainer.innerHTML = `
-                ${results.movies.length > 0 ? `
-                    <h2 class="text-xl font-semibold mb-4">Movies</h2>
-                    <div class="media-grid">${results.movies.map(createMediaHtml).join('')}</div>
-                ` : ''}
-                ${results.tvShows.length > 0 ? `
-                    <h2 class="text-xl font-semibold mt-8 mb-4">TV Shows</h2>
-                    <div class="media-grid">${results.tvShows.map(createMediaHtml).join('')}</div>
-                ` : ''}
+                ${results.movies.length > 0 ? `<h2 class="text-xl font-semibold mb-4">Movies</h2><div class="media-grid">${results.movies.map(createMediaHtml).join('')}</div>` : ''}
+                ${results.tvShows.length > 0 ? `<h2 class="text-xl font-semibold mt-8 mb-4">TV Shows</h2><div class="media-grid">${results.tvShows.map(createMediaHtml).join('')}</div>` : ''}
             `;
         } catch (error) {
             resultsContainer.innerHTML = '<p class="text-red-400 text-center">Error performing search.</p>';
@@ -138,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h1 class="text-3xl font-bold mb-6">Settings</h1>
              <div class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <p class="text-sm">App Version: 1.0.2</p>
+                    <p class="text-sm">App Version: 1.1.0</p>
                     <p class="text-xs text-gray-400 mt-1">Developed by Skye</p>
                 </div>
             </div>`;
@@ -177,6 +172,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showVideoPlayer(item) {
+        // Destroy any previously active player
+        if (activePlayer) {
+            activePlayer.destroy();
+            activePlayer = null;
+        }
+
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
         const videoSrc = `${API_URL}${item.filePath}`;
@@ -184,26 +185,39 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.innerHTML = `
             <div class="modal-content">
                 <button class="close-modal-btn">&times;</button>
-                <video controls autoplay controlsList="nodownload">
+                <video id="player" playsinline controls>
                     <source src="${videoSrc}" type="video/mp4">
-                    Your browser does not support the video tag.
                 </video>
             </div>`;
         document.body.appendChild(modal);
-        setTimeout(() => modal.classList.add('visible'), 10);
-        modal.querySelector('.close-modal-btn').addEventListener('click', () => {
+
+        // Initialize the Plyr player
+        const player = new Plyr('#player', {
+            // Options can go here
+        });
+        activePlayer = player;
+
+        setTimeout(() => {
+            modal.classList.add('visible');
+            player.play();
+        }, 10);
+
+        const closeModal = () => {
+            if (activePlayer) {
+                activePlayer.destroy();
+                activePlayer = null;
+            }
             modal.classList.remove('visible');
             modal.addEventListener('transitionend', () => modal.remove());
-        });
+        };
+        modal.querySelector('.close-modal-btn').addEventListener('click', closeModal);
     }
     
-    // --- EVENT LISTENERS ---
+    // --- EVENT LISTENERS & ROUTER ---
     content.addEventListener('click', (e) => {
         const mediaItemEl = e.target.closest('.media-item');
         if (mediaItemEl) {
             const { id, type } = mediaItemEl.dataset;
-            // Search results might not be from the main cache, so we need to find the item
-            // in the full library cache if it exists.
             let item;
             if (mediaLibraryCache) {
                  const library = type === 'movie' ? mediaLibraryCache.movies : mediaLibraryCache.tvShows;
@@ -259,6 +273,5 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.addEventListener('hashchange', router);
     
-    // Initial load
     router();
 });
