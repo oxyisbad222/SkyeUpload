@@ -15,10 +15,9 @@ async function startServer() {
     const app = express();
     const client = new WebTorrent();
     const PORT = process.env.PORT || 3000;
-    const TMDB_API_KEY = process.env.TMDB_API_KEY; // Get API key from environment
+    const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
     // --- Public Trackers List ---
-    // A curated list of public trackers to improve peer discovery.
     const trackers = [
         'udp://tracker.opentrackr.org:1337/announce',
         'udp://open.demonii.com:1337/announce',
@@ -30,12 +29,8 @@ async function startServer() {
         'https://opentracker.i2p.rocks:443/announce',
     ];
 
-
     // --- CORS Configuration ---
-    const allowedOrigins = [
-        'https://skye-upload-admin.vercel.app',
-        'https://skye-upload.vercel.app' // Your deployed client URL
-    ];
+    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
     const corsOptions = {
         origin: function (origin, callback) {
             if (!origin || allowedOrigins.indexOf(origin) !== -1) {
@@ -44,7 +39,7 @@ async function startServer() {
                 callback(new Error('Not allowed by CORS'));
             }
         },
-        methods: ['GET', 'POST', 'PUT', 'DELETE'] // Allow PUT and DELETE
+        methods: ['GET', 'POST', 'PUT', 'DELETE']
     };
     app.use(cors(corsOptions));
 
@@ -119,7 +114,9 @@ async function startServer() {
     apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
         const { title, type, genre, url, source_type } = req.body;
         if (!title || !type) return res.status(400).json({ message: 'Title and type are required.' });
+        
         const metadata = await fetchTmdbMetadata(title, type);
+        
         if (source_type === 'file' && req.file) {
             addMediaToLibrary({
                 id: Date.now(), title, type, genre: genre || "Uncategorized",
@@ -129,23 +126,34 @@ async function startServer() {
             });
             return res.status(201).json({ message: 'File uploaded successfully!'});
         } else if (source_type === 'magnet' && url) {
-            const torrentOptions = {
-                path: uploadDir,
-                announce: trackers // Add our tracker list to the options
-            };
-            client.add(url, torrentOptions, (torrent) => {
+            const torrentOptions = { path: uploadDir, announce: trackers };
+            
+            console.log(`[WebTorrent] Adding torrent for "${title}"`);
+            const torrent = client.add(url, torrentOptions);
+
+            torrent.on('error', (err) => {
+                console.error(`[WebTorrent] Error for torrent "${title}":`, err.message);
+                client.remove(torrent.infoHash); // Clean up failed torrent
+            });
+
+            torrent.on('ready', () => {
+                console.log(`[WebTorrent] Torrent is ready to stream for "${title}"`);
                 const file = torrent.files.reduce((a, b) => a.length > b.length ? a : b);
                 const fileIndex = torrent.files.indexOf(file);
+                
                 addMediaToLibrary({
                     id: Date.now(), title, type, genre: genre || "Uncategorized",
                     poster_path: metadata?.poster_path, overview: metadata?.overview,
                     release_date: metadata?.release_date || metadata?.first_air_date,
                     filePath: `/api/stream/${torrent.infoHash}/${fileIndex}`, streamType: 'torrent',
-                    infoHash: torrent.infoHash, fileIndex: fileIndex
+                    infoHash: torrent.infoHash, fileIndex: fileIndex,
+                    addedAt: Date.now()
                 });
-                torrent.on('done', () => console.log(`[WebTorrent] Download finished for: ${file.name}.`));
             });
-            return res.status(202).json({ message: `"${title}" is processing and will be available.` });
+
+            torrent.on('done', () => console.log(`[WebTorrent] Download finished for: ${torrent.name}.`));
+            
+            return res.status(202).json({ message: `"${title}" is being processed and will be available.` });
         } else {
             return res.status(400).json({ message: 'Invalid request.' });
         }
@@ -154,12 +162,15 @@ async function startServer() {
     // STREAM TORRENT
     apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
         const torrent = client.get(req.params.infoHash);
-        if (!torrent) return res.status(404).send('Torrent not found.');
+        if (!torrent || !torrent.ready) return res.status(404).send('Torrent not ready for streaming.');
         const file = torrent.files[parseInt(req.params.fileIndex, 10)];
         if (!file) return res.status(404).send('File not found in torrent.');
+        
+        console.log(`[Stream] Streaming request for ${file.name}`);
         const range = req.headers.range;
         const fileSize = file.length;
         const head = { 'Content-Length': fileSize, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes' };
+        
         if (range) {
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
@@ -221,6 +232,22 @@ async function startServer() {
     });
     
     app.use('/api', apiRouter);
+
+    // --- Resource Management ---
+    const destroyInactiveTorrents = () => {
+        const now = Date.now();
+        const INACTIVE_TIME = 1000 * 60 * 30; // 30 minutes
+        
+        client.torrents.forEach(torrent => {
+            const mediaItem = mediaLibrary.movies.find(m => m.infoHash === torrent.infoHash) || mediaLibrary.tvShows.find(t => t.infoHash === torrent.infoHash);
+            // If the torrent is done and hasn't been added for a while, remove it to save resources
+            if (torrent.done && mediaItem && (now - mediaItem.addedAt > INACTIVE_TIME)) {
+                 console.log(`[GC] Destroying inactive downloaded torrent: ${torrent.name}`);
+                 client.remove(torrent.infoHash);
+            }
+        });
+    };
+    setInterval(destroyInactiveTorrents, 1000 * 60 * 5); // Run every 5 minutes
 
     // --- Start Server ---
     const server = app.listen(PORT, () => {
