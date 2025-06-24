@@ -1,26 +1,19 @@
-// Import required modules
 const express = require('express');
-const path =require('path');
+const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-// The server logic is wrapped in an async function
-// to allow for the dynamic, top-level import of WebTorrent and node-fetch.
 async function startServer() {
-    // Dynamically import the 'webtorrent' package which is an ES Module.
     const WebTorrent = (await import('webtorrent')).default;
-    // Dynamically import 'node-fetch'
     const fetch = (await import('node-fetch')).default;
 
-    // Initialize the Express app and WebTorrent client
     const app = express();
     const client = new WebTorrent();
     const PORT = process.env.PORT || 3000;
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-    // --- Public Trackers List ---
     const trackers = [
         'udp://tracker.opentrackr.org:1337/announce',
         'udp://open.demonii.com:1337/announce',
@@ -28,7 +21,6 @@ async function startServer() {
         'udp://tracker.torrent.eu.org:451/announce',
     ];
 
-    // --- CORS Configuration ---
     const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
     const corsOptions = {
         origin: function (origin, callback) {
@@ -42,13 +34,11 @@ async function startServer() {
     };
     app.use(cors(corsOptions));
 
-    // --- Persistent Storage Setup ---
     const dataDir = process.env.FLYSK_DATA_DIR || '/data';
     const dbPath = path.join(dataDir, 'database.json');
     const uploadDir = path.join(dataDir, 'uploads');
     console.log(`Using data directory: ${dataDir}`);
 
-    // --- Database Functions ---
     const readDb = () => {
         try {
             if (fs.existsSync(dbPath)) return JSON.parse(fs.readFileSync(dbPath));
@@ -58,15 +48,16 @@ async function startServer() {
             return defaultDb;
         } catch (error) { console.error("DB Read Error:", error); return { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [] }; }
     };
+
     const writeDb = (data) => {
         try { fs.writeFileSync(dbPath, JSON.stringify(data, null, 2)); }
         catch (error) { console.error("DB Write Error:", error); }
     };
+
     let { mediaLibrary, contentRequests } = readDb();
 
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-    // --- Multer Configuration ---
     const storage = multer.diskStorage({
         destination: (req, file, cb) => cb(null, uploadDir),
         filename: (req, file, cb) => {
@@ -76,10 +67,10 @@ async function startServer() {
     });
     const upload = multer({ storage: storage });
 
-    // --- Middleware & Helpers ---
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     app.use('/uploads', express.static(uploadDir));
+
     const addMediaToLibrary = (mediaItem) => {
         const library = mediaItem.type === 'movie' ? mediaLibrary.movies : mediaLibrary.tvShows;
         if (library.some(item => item.title.toLowerCase() === mediaItem.title.toLowerCase())) {
@@ -91,7 +82,6 @@ async function startServer() {
         console.log('New media added:', mediaItem.title);
     };
 
-    // --- TMDB Helper ---
     async function fetchTmdbMetadata(title, type) {
         if (!TMDB_API_KEY) {
             return { poster_path: null, overview: "No metadata available.", release_date: "N/A" };
@@ -106,7 +96,6 @@ async function startServer() {
         return null;
     }
 
-    // --- Direct Download Helper ---
     const downloadFromLink = async (link, title, type) => {
         try {
             console.log(`[Direct DL] Starting download for "${title}" from ${link}`);
@@ -134,15 +123,11 @@ async function startServer() {
         }
     };
 
-
-    // --- API Router ---
     const apiRouter = express.Router();
 
-    // UPLOAD MEDIA
     apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
         const { title, type, genre, url, source_type, batch_links } = req.body;
         
-        // --- BATCH LINK Processing ---
         if (source_type === 'batch-link') {
             if (!batch_links) return res.status(400).json({ message: 'No links provided for batch upload.' });
             
@@ -159,7 +144,6 @@ async function startServer() {
             return res.status(202).json({ message: `${links.length} links are being processed in the background.` });
         }
         
-        // --- Single Upload Logic ---
         if (!title || !type) return res.status(400).json({ message: 'Title and type are required.' });
         const metadata = await fetchTmdbMetadata(title, type);
 
@@ -191,14 +175,12 @@ async function startServer() {
         }
     });
 
-    // STREAM TORRENT
     apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
         const torrent = client.get(req.params.infoHash);
         if (!torrent || !torrent.ready) return res.status(404).send('Torrent not ready for streaming.');
         const file = torrent.files[parseInt(req.params.fileIndex, 10)];
         if (!file) return res.status(404).send('File not found in torrent.');
         
-        console.log(`[Stream] Streaming request for ${file.name}`);
         const range = req.headers.range;
         const fileSize = file.length;
         const head = { 'Content-Length': fileSize, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes' };
@@ -217,21 +199,51 @@ async function startServer() {
         }
     });
     
-    // GET ALL MEDIA
     apiRouter.get('/media', (req, res) => res.json(mediaLibrary));
 
-    // SEARCH MEDIA
+    apiRouter.delete('/admin/media/:type/:id', (req, res) => {
+        const { type, id } = req.params;
+        const numericId = parseInt(id);
+        const library = type === 'movies' ? mediaLibrary.movies : mediaLibrary.tvShows;
+        const itemIndex = library.findIndex(item => item.id === numericId);
+
+        if (itemIndex === -1) {
+            return res.status(404).json({ message: 'Media not found' });
+        }
+
+        const item = library[itemIndex];
+
+        if (item.streamType === 'torrent') {
+            const torrent = client.get(item.infoHash);
+            if (torrent) {
+                client.remove(torrent.infoHash, () => {
+                    console.log(`[Delete] Removed torrent: ${item.title}`);
+                });
+            }
+        } else if (item.streamType === 'file') {
+            const filePath = path.join(uploadDir, path.basename(item.filePath));
+            if (fs.existsSync(filePath)) {
+                fs.unlink(filePath, (err) => {
+                    if (err) console.error(`[Delete] Error deleting file ${filePath}:`, err);
+                    else console.log(`[Delete] Deleted file: ${filePath}`);
+                });
+            }
+        }
+
+        library.splice(itemIndex, 1);
+        writeDb({ mediaLibrary, contentRequests });
+
+        res.status(200).json({ message: `Successfully deleted "${item.title}"` });
+    });
+
     apiRouter.get('/search', (req, res) => {
         const query = (req.query.q || '').toLowerCase().trim();
-        if (!query) {
-            return res.json({ movies: [], tvShows: [] });
-        }
+        if (!query) return res.json({ movies: [], tvShows: [] });
         const filteredMovies = mediaLibrary.movies.filter(movie => movie.title.toLowerCase().includes(query));
         const filteredTvShows = mediaLibrary.tvShows.filter(show => show.title.toLowerCase().includes(query));
         res.json({ movies: filteredMovies, tvShows: filteredTvShows });
     });
 
-    // MANAGE REQUESTS
     apiRouter.get('/admin/requests', (req, res) => res.json(contentRequests));
     apiRouter.delete('/admin/requests/:id', (req, res) => {
         contentRequests = contentRequests.filter(r => r.id !== parseInt(req.params.id));
@@ -257,7 +269,6 @@ async function startServer() {
         res.status(201).json({ message: 'Request submitted.', request: newRequest });
     });
 
-    // GET SERVER STATUS
     apiRouter.get('/admin/status', (req, res) => {
         const torrents = client.torrents.map(t => ({
             name: t.name, infoHash: t.infoHash, progress: (t.progress * 100).toFixed(2),
@@ -276,7 +287,6 @@ async function startServer() {
     
     app.use('/api', apiRouter);
 
-    // --- Resource Management ---
     setInterval(() => {
         const now = Date.now();
         const INACTIVE_TIME = 1000 * 60 * 30;
@@ -288,7 +298,6 @@ async function startServer() {
         });
     }, 1000 * 60 * 5);
 
-    // --- Start Server ---
     const server = app.listen(PORT, () => console.log(`SkyeUpload server running on http://localhost:${PORT}`));
     process.on('SIGINT', () => server.close(() => client.destroy(() => process.exit(0))));
 }
