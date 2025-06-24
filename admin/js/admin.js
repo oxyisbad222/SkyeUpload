@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
     
-    const API_URL = 'http://localhost:3000/api';
+    const API_URL = 'https://skyeupload.fly.dev/';
 
     // --- RENDER FUNCTIONS ---
 

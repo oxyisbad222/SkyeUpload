@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    const API_URL = 'http://localhost:3000/api';
+    const API_URL = 'https://skyeupload.fly.dev/';
 
     // --- RENDER FUNCTIONS ---
 
