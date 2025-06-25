@@ -1,5 +1,5 @@
 const express = require('express');
-const path = path');
+const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
