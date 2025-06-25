@@ -2,8 +2,9 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 async function startServer() {
     const WebTorrent = (await import('webtorrent')).default;
@@ -14,235 +15,174 @@ async function startServer() {
     const PORT = process.env.PORT || 3000;
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-    if (!TMDB_API_KEY) {
-        console.warn('WARNING: TMDB_API_KEY is not set. Metadata fetching will be disabled.');
-    }
+    const {
+        STORJ_ACCESS_KEY, STORJ_SECRET_KEY, STORJ_ENDPOINT, STORJ_BUCKET_NAME,
+        B2_ACCESS_KEY, B2_SECRET_KEY, B2_ENDPOINT, B2_BUCKET_NAME
+    } = process.env;
 
+    const s3ConfigStorj = {
+        credentials: { accessKeyId: STORJ_ACCESS_KEY, secretAccessKey: STORJ_SECRET_KEY },
+        endpoint: `https://${STORJ_ENDPOINT}`,
+        region: 'us-east-1',
+    };
+
+    const s3ConfigB2 = {
+        credentials: { accessKeyId: B2_ACCESS_KEY, secretAccessKey: B2_SECRET_KEY },
+        endpoint: `https://${B2_ENDPOINT}`,
+        region: B2_ENDPOINT.split('.')[1],
+    };
+
+    const storjClient = new S3Client(s3ConfigStorj);
+    const b2Client = new S3Client(s3ConfigB2);
+    
     let trackers = [];
     try {
         const trackerData = fs.readFileSync(path.join(__dirname, 'best.txt'), 'utf8');
         trackers = trackerData.split('\n').filter(t => t.trim() !== '');
-        console.log(`Loaded ${trackers.length} trackers.`);
     } catch (error) {
-        console.warn('Could not read best.txt, using default trackers.');
-        trackers = [
-            'udp://tracker.opentrackr.org:1337/announce',
-            'udp://open.demonii.com:1337/announce',
-        ];
+        trackers = ['udp://tracker.opentrackr.org:1337/announce'];
     }
-    
-    const allowedOrigins = [
-        'https://skye-upload-admin.vercel.app',
-        'https://skye-upload.vercel.app'
-    ];
+
+    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
     const corsOptions = {
-        origin: function (origin, callback) {
-            if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+            else callback(new Error('Not allowed by CORS'));
         },
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
         optionsSuccessStatus: 204
     };
     app.use(cors(corsOptions));
-
-    const dataDir = process.env.FLYSK_DATA_DIR || '/data';
-    const dbPath = path.join(dataDir, 'database.json');
-    const uploadDir = path.join(dataDir, 'uploads');
-    console.log(`Using data directory: ${dataDir}`);
-
+    
+    const dbPath = path.join('/data', 'database.json');
+    
     const readDb = () => {
         try {
             if (fs.existsSync(dbPath)) return JSON.parse(fs.readFileSync(dbPath));
-            const defaultDb = { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [] };
-            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+            const defaultDb = { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [], storageUsage: { storj: 0, b2: 0 } };
+            if (!fs.existsSync('/data')) fs.mkdirSync('/data', { recursive: true });
             fs.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2));
             return defaultDb;
-        } catch (error) { console.error("DB Read Error:", error); return { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [] }; }
+        } catch (error) {
+            console.error("DB Read Error:", error);
+            return { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [], storageUsage: { storj: 0, b2: 0 } };
+        }
     };
-
+    
     const writeDb = (data) => {
         try { fs.writeFileSync(dbPath, JSON.stringify(data, null, 2)); }
         catch (error) { console.error("DB Write Error:", error); }
     };
 
-    let { mediaLibrary, contentRequests } = readDb();
-
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-    const storage = multer.diskStorage({
-        destination: (req, file, cb) => cb(null, uploadDir),
-        filename: (req, file, cb) => {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-        }
-    });
-    const upload = multer({ storage: storage });
+    let { mediaLibrary, contentRequests, storageUsage } = readDb();
+    
+    const upload = multer({ storage: multer.memoryStorage() });
 
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-    app.use('/uploads', express.static(uploadDir));
 
+    const updateStorageUsage = async () => {
+        let storjSize = 0;
+        let b2Size = 0;
+        try {
+            const storjObjects = await storjClient.send(new ListObjectsV2Command({ Bucket: STORJ_BUCKET_NAME }));
+            if (storjObjects.Contents) storjSize = storjObjects.Contents.reduce((acc, item) => acc + item.Size, 0);
+
+            const b2Objects = await b2Client.send(new ListObjectsV2Command({ Bucket: B2_BUCKET_NAME }));
+            if (b2Objects.Contents) b2Size = b2Objects.Contents.reduce((acc, item) => acc + item.Size, 0);
+
+            storageUsage = { storj: storjSize, b2: b2Size };
+            writeDb({ mediaLibrary, contentRequests, storageUsage });
+        } catch (error) {
+            console.error("Could not update storage usage:", error);
+        }
+    };
+    
     const addMediaToLibrary = (mediaItem) => {
         const library = mediaItem.type === 'movie' ? mediaLibrary.movies : mediaLibrary.tvShows;
-        if (library.some(item => item.title.toLowerCase() === mediaItem.title.toLowerCase())) {
-             console.log(`Duplicate found for "${mediaItem.title}". Skipping.`);
-             return;
-        }
         library.push(mediaItem);
-        writeDb({ mediaLibrary, contentRequests });
-        console.log('New media added:', mediaItem.title);
+        writeDb({ mediaLibrary, contentRequests, storageUsage });
     };
 
     async function fetchTmdbMetadata(title, type) {
-        if (!TMDB_API_KEY) {
-            return { poster_path: null, overview: "No metadata available.", release_date: "N/A" };
-        }
-        const searchType = type === 'movie' ? 'movie' : 'tv';
-        const url = `https://api.themoviedb.org/3/search/${searchType}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`;
+        if (!TMDB_API_KEY) return { poster_path: null, overview: "No metadata available.", release_date: "N/A" };
+        const url = `https://api.themoviedb.org/3/search/${type === 'movie' ? 'movie' : 'tv'}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`;
         try {
             const response = await fetch(url);
             const data = await response.json();
-            if (data.results && data.results.length > 0) return data.results[0];
-        } catch (error) { console.error("TMDB fetch error:", error); }
-        return null;
-    }
-
-    const downloadFromLink = async (link, title, type) => {
-        try {
-            console.log(`[Direct DL] Starting download for "${title}" from ${link}`);
-            const response = await fetch(link);
-            if (!response.ok) {
-                throw new Error(`Unexpected response ${response.statusText}`);
-            }
-            const fileName = `${uuidv4()}.mp4`;
-            const filePath = path.join(uploadDir, fileName);
-            const dest = fs.createWriteStream(filePath);
-            response.body.pipe(dest);
-
-            dest.on('finish', async () => {
-                console.log(`[Direct DL] Finished downloading "${title}"`);
-                const metadata = await fetchTmdbMetadata(title, type);
-                addMediaToLibrary({
-                    id: Date.now(), title, type, genre: "Direct Download",
-                    poster_path: metadata?.poster_path, overview: metadata?.overview,
-                    release_date: metadata?.release_date || metadata?.first_air_date,
-                    filePath: `/uploads/${fileName}`, streamType: 'file'
-                });
-            });
+            return data.results?.[0] || null;
         } catch (error) {
-            console.error(`[Direct DL] Error downloading "${title}":`, error.message);
+            console.error("TMDB fetch error:", error);
+            return null;
         }
-    };
+    }
 
     const apiRouter = express.Router();
 
-    apiRouter.post('/admin/torrent-info', (req, res) => {
-        const { magnet } = req.body;
-        if (!magnet) return res.status(400).json({ message: 'Magnet link is required.' });
-
-        const torrent = client.add(magnet, { path: uploadDir, announce: trackers });
-        
-        torrent.on('metadata', () => {
-            const files = torrent.files.map(file => ({ name: file.name, length: file.length }));
-            res.status(200).json({ files });
-            client.remove(torrent.infoHash);
-        });
-
-        setTimeout(() => {
-            if (!torrent.metadata) {
-                res.status(408).json({ message: 'Timeout fetching torrent metadata. Check magnet link or try again.'});
-                client.remove(torrent.infoHash);
-            }
-        }, 20000);
-    });
-
     apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
-        const { title, type, url, source_type, batch_links, selectedFiles } = req.body;
+        const { title, type } = req.body;
+        if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
 
-        if (source_type === 'batch-link') {
-            if (!batch_links) return res.status(400).json({ message: 'No links provided.' });
-            const links = batch_links.split('\n').filter(link => link.trim() !== '');
-            links.forEach(link => {
-                let guessedTitle = path.basename(new URL(link).pathname).replace(/[\._]/g, ' ').replace(/\.mp4/i, '');
-                downloadFromLink(link, guessedTitle, 'movie');
-            });
-            return res.status(202).json({ message: `${links.length} links processing.` });
-        }
-
-        if (source_type === 'magnet') {
-            const torrentOptions = { path: uploadDir, announce: trackers };
-            const torrent = client.add(url, torrentOptions);
-            
-            torrent.on('ready', () => {
-                torrent.files.forEach(file => file.deselect());
-
-                const filesToDownload = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
-                filesToDownload.forEach(index => {
-                    const file = torrent.files[parseInt(index)];
-                    if (file) {
-                        file.select();
-                        const guessedTitle = title || file.name.replace(/[\._]/g, ' ').replace(/\.mp4|\.mkv/i, '');
-                        const mediaType = type || (file.name.toLowerCase().includes('s0') ? 'tvShow' : 'movie');
-
-                        fetchTmdbMetadata(guessedTitle, mediaType).then(metadata => {
-                             addMediaToLibrary({
-                                id: Date.now() + parseInt(index), title: guessedTitle, type: mediaType,
-                                poster_path: metadata?.poster_path, overview: metadata?.overview,
-                                release_date: metadata?.release_date || metadata?.first_air_date,
-                                filePath: `/api/stream/${torrent.infoHash}/${index}`, streamType: 'torrent',
-                                infoHash: torrent.infoHash, fileIndex: index, addedAt: Date.now()
-                            });
-                        });
-                    }
-                });
-            });
-            return res.status(202).json({ message: `Selected torrent files are being downloaded.` });
-        }
+        const totalUsage = storageUsage.storj + storageUsage.b2;
+        const useStorj = totalUsage < (25 * 1024 * 1024 * 1024);
         
-        if (source_type === 'file' && req.file) {
+        const s3Client = useStorj ? storjClient : b2Client;
+        const bucketName = useStorj ? STORJ_BUCKET_NAME : B2_BUCKET_NAME;
+        const storageType = useStorj ? 'storj' : 'b2';
+        const fileKey = `${uuidv4()}-${req.file.originalname}`;
+
+        try {
+            await s3Client.send(new PutObjectCommand({
+                Bucket: bucketName,
+                Key: fileKey,
+                Body: req.file.buffer,
+                ContentType: req.file.mimetype,
+            }));
+
+            if (useStorj) storageUsage.storj += req.file.size;
+            else storageUsage.b2 += req.file.size;
+            
             const metadata = await fetchTmdbMetadata(title, type);
             addMediaToLibrary({
                 id: Date.now(), title, type,
                 poster_path: metadata?.poster_path, overview: metadata?.overview,
                 release_date: metadata?.release_date || metadata?.first_air_date,
-                filePath: `/uploads/${req.file.filename}`, streamType: 'file'
+                streamType: 's3',
+                storageDetails: { storageType, bucketName, fileKey }
             });
-            return res.status(201).json({ message: 'File uploaded successfully!'});
-        }
-        
-        return res.status(400).json({ message: 'Invalid request.' });
-    });
 
-    apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
-        const torrent = client.get(req.params.infoHash);
-        if (!torrent || !torrent.ready) return res.status(404).send('Torrent not ready.');
-        const file = torrent.files[parseInt(req.params.fileIndex, 10)];
-        if (!file) return res.status(404).send('File not found in torrent.');
-        
-        const range = req.headers.range;
-        const fileSize = file.length;
-        const head = { 'Content-Length': fileSize, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes' };
-        
-        if (range) {
-            const parts = range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-            head['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
-            head['Content-Length'] = (end - start) + 1;
-            res.writeHead(206, head);
-            file.createReadStream({ start, end }).pipe(res);
-        } else {
-            res.writeHead(200, head);
-            file.createReadStream().pipe(res);
+            res.status(201).json({ message: `File uploaded to ${storageType} successfully!` });
+        } catch (error) {
+            console.error(`Upload Error to ${storageType}:`, error);
+            res.status(500).json({ message: 'Failed to upload file.' });
         }
     });
     
+    apiRouter.get('/stream/:id', async (req, res) => {
+        const mediaId = parseInt(req.params.id);
+        const allMedia = [...mediaLibrary.movies, ...mediaLibrary.tvShows];
+        const mediaItem = allMedia.find(m => m.id === mediaId);
+
+        if (!mediaItem || mediaItem.streamType !== 's3') {
+            return res.status(404).json({ message: 'Media not found or not streamable.' });
+        }
+
+        const { storageType, bucketName, fileKey } = mediaItem.storageDetails;
+        const s3Client = storageType === 'storj' ? storjClient : b2Client;
+        
+        try {
+            const command = new PutObjectCommand({ Bucket: bucketName, Key: fileKey });
+            const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            res.redirect(url);
+        } catch (error) {
+            console.error("Error generating signed URL:", error);
+            res.status(500).json({ message: "Could not generate streaming link." });
+        }
+    });
+
     apiRouter.get('/media', (req, res) => res.json(mediaLibrary));
 
-    apiRouter.delete('/admin/media/:type/:id', (req, res) => {
+    apiRouter.delete('/admin/media/:type/:id', async (req, res) => {
         const { type, id } = req.params;
         const numericId = parseInt(id);
         const library = type === 'movies' ? mediaLibrary.movies : mediaLibrary.tvShows;
@@ -252,22 +192,30 @@ async function startServer() {
         
         const item = library[itemIndex];
 
-        if (item.streamType === 'torrent') {
-            const torrent = client.get(item.infoHash);
-            if (torrent) client.remove(torrent.infoHash, () => console.log(`[Delete] Removed torrent: ${item.title}`));
-        } else if (item.streamType === 'file') {
-            const filePath = path.join(uploadDir, path.basename(item.filePath));
-            if (fs.existsSync(filePath)) {
-                fs.unlink(filePath, (err) => {
-                    if (err) console.error(`[Delete] Error deleting file ${filePath}:`, err);
-                    else console.log(`[Delete] Deleted file: ${filePath}`);
-                });
+        if (item.streamType === 's3') {
+            const { storageType, bucketName, fileKey } = item.storageDetails;
+            const s3Client = storageType === 'storj' ? storjClient : b2Client;
+            try {
+                await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: fileKey }));
+            } catch (error) {
+                console.error(`Failed to delete ${fileKey} from ${storageType}:`, error);
             }
         }
 
         library.splice(itemIndex, 1);
-        writeDb({ mediaLibrary, contentRequests });
+        writeDb({ mediaLibrary, contentRequests, storageUsage });
+        await updateStorageUsage();
         res.status(200).json({ message: `Successfully deleted "${item.title}"` });
+    });
+    
+    apiRouter.get('/admin/status', (req, res) => {
+        res.json({
+            status: 'online',
+            uptime: `${Math.floor(process.uptime())}s`,
+            storageUsage,
+            movies_hosted: mediaLibrary.movies.length,
+            shows_hosted: mediaLibrary.tvShows.length,
+        });
     });
 
     apiRouter.get('/search', (req, res) => {
@@ -281,14 +229,14 @@ async function startServer() {
     apiRouter.get('/admin/requests', (req, res) => res.json(contentRequests));
     apiRouter.delete('/admin/requests/:id', (req, res) => {
         contentRequests = contentRequests.filter(r => r.id !== parseInt(req.params.id));
-        writeDb({ mediaLibrary, contentRequests });
+        writeDb({ mediaLibrary, contentRequests, storageUsage });
         res.status(200).json({ message: 'Request deleted.' });
     });
     apiRouter.put('/admin/requests/:id', (req, res) => {
         const request = contentRequests.find(r => r.id === parseInt(req.params.id));
         if (request) {
             request.status = request.status === 'pending' ? 'fulfilled' : 'pending';
-            writeDb({ mediaLibrary, contentRequests });
+            writeDb({ mediaLibrary, contentRequests, storageUsage });
             res.status(200).json(request);
         } else {
             res.status(404).json({ message: 'Request not found.' });
@@ -299,61 +247,20 @@ async function startServer() {
         if (!title) return res.status(400).json({ message: 'Title is required' });
         const newRequest = { id: Date.now(), title, details, status: 'pending', timestamp: new Date().toISOString() };
         contentRequests.push(newRequest);
-        writeDb({ mediaLibrary, contentRequests });
+        writeDb({ mediaLibrary, contentRequests, storageUsage });
         res.status(201).json({ message: 'Request submitted.', request: newRequest });
     });
 
-    apiRouter.get('/admin/status', (req, res) => {
-        const torrents = client.torrents.map(t => ({
-            name: t.name, infoHash: t.infoHash, progress: (t.progress * 100).toFixed(2),
-            downloadSpeed: (t.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s', peers: t.numPeers
-        }));
-        res.json({
-            status: 'online', uptime: `${Math.floor(process.uptime())}s`,
-            requests_pending: contentRequests.length,
-            movies_hosted: mediaLibrary.movies.length,
-            shows_hosted: mediaLibrary.tvShows.length,
-            torrents_active: client.torrents.length,
-            total_download_speed: (client.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s',
-            torrents
-        });
-    });
-    
-    apiRouter.get('/settings', (req, res) => {
-        res.json({
-            clientVersion: '1.3.0',
-            storageSolution: 'Local Volume',
-            storageCapacity: '10GB (Fly.io default)',
-        });
-    });
-    
     app.use('/api', apiRouter);
 
-    setInterval(() => {
-        console.log('[Maintenance] Checking for completed torrents to remove...');
-        client.torrents.forEach(torrent => {
-            if (torrent.done) {
-                if (!torrent.doneTimestamp) torrent.doneTimestamp = Date.now();
-                if (Date.now() - torrent.doneTimestamp > (1000 * 60 * 30)) {
-                    console.log(`[Maintenance] Removing completed torrent: ${torrent.name}`);
-                    client.remove(torrent.infoHash, (err) => {
-                        if (err) console.error(`[Maintenance] Error removing torrent: ${err.message}`);
-                    });
-                }
-            }
-        });
-    }, 1000 * 60 * 5);
-
-    app.use((err, req, res, next) => {
-        console.error("Unhandled error caught:", err);
-        res.status(500).json({ message: 'An unexpected server error occurred.', error: err.message });
-    });
+    setInterval(updateStorageUsage, 1000 * 60 * 60);
 
     const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`SkyeUpload server running on http://localhost:${PORT}`);
+        updateStorageUsage();
     });
     
-    process.on('SIGINT', () => server.close(() => client.destroy(() => process.exit(0))));
+    process.on('SIGINT', () => server.close(() => process.exit(0)));
 }
 
 startServer().catch(err => {
