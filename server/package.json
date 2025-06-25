@@ -1,6 +1,6 @@
 {
   "name": "skyeupload-server",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Server for the SkyeUpload personal media suite.",
   "main": "server.js",
   "scripts": {
@@ -11,6 +11,7 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.592.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^3.3.2",
