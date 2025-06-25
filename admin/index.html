@@ -2,57 +2,100 @@
 <html lang="en" class="h-full bg-gray-900">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SkyeUpload - Admin Panel</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/lucide.min.js"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .sidebar-link {
-            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-        }
-        .sidebar-link.active {
-            background-color: #4f46e5; /* indigo-600 */
-        }
-        .sidebar-link:not(.active):hover {
-            background-color: #374151; /* gray-700 */
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .sidebar-link { transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out; }
+        .sidebar-link.active { background-color: #4f46e5; }
+        .sidebar-link:not(.active):hover { background-color: #374151; }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 40;
+            }
+            #sidebar.open { transform: translateX(0); }
+            #mobile-header { display: flex; }
+            main { padding-top: 5rem; }
         }
     </style>
 </head>
 <body class="h-full text-gray-200">
 
 <div class="flex h-full">
-    <!-- Sidebar -->
-    <aside class="w-64 bg-gray-800 p-4 flex flex-col">
+    <aside id="sidebar" class="w-64 bg-gray-800 p-4 flex-col md:flex hidden">
         <div class="mb-8">
             <h1 class="text-2xl font-bold text-white">Skye<span class="text-indigo-400">Upload</span></h1>
             <p class="text-sm text-gray-400">Admin Panel</p>
         </div>
         <nav class="flex-grow">
             <ul>
-                <li><a href="#upload" class="sidebar-link active block rounded-md py-2 px-3 font-medium">Upload Content</a></li>
-                <li><a href="#manage" class="sidebar-link block rounded-md py-2 px-3 font-medium mt-1">Manage Content</a></li>
-                <li><a href="#requests" class="sidebar-link block rounded-md py-2 px-3 font-medium mt-1">Manage Requests</a></li>
-                <li><a href="#status" class="sidebar-link block rounded-md py-2 px-3 font-medium mt-1">Server Status</a></li>
+                <li><a href="#upload" class="sidebar-link active flex items-center gap-3 rounded-md py-2 px-3 font-medium"><i data-lucide="upload-cloud"></i>Upload Content</a></li>
+                <li><a href="#manage" class="sidebar-link flex items-center gap-3 rounded-md py-2 px-3 font-medium mt-1"><i data-lucide="folder-kanban"></i>Manage Content</a></li>
+                <li><a href="#requests" class="sidebar-link flex items-center gap-3 rounded-md py-2 px-3 font-medium mt-1"><i data-lucide="mail-plus"></i>Manage Requests</a></li>
+                <li><a href="#status" class="sidebar-link flex items-center gap-3 rounded-md py-2 px-3 font-medium mt-1"><i data-lucide="server"></i>Server Status</a></li>
             </ul>
         </nav>
-        <div class="text-xs text-gray-500">
-            <p>&copy; 2024 Developed by Skye</p>
-        </div>
+        <div class="text-xs text-gray-500"><p>&copy; 2024 Developed by Skye</p></div>
     </aside>
 
-    <!-- Main Content -->
-    <main id="admin-content" class="flex-1 p-8 overflow-y-auto">
-        <!-- Content will be dynamically loaded here -->
+    <div id="mobile-header" class="fixed top-0 left-0 right-0 bg-gray-800/70 backdrop-blur-md p-4 items-center justify-between z-30 md:hidden">
+        <h1 class="text-xl font-bold text-white">Skye<span class="text-indigo-400">Upload</span></h1>
+        <button id="menu-toggle" class="text-white">
+            <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <main id="admin-content" class="flex-1 p-4 md:p-8 overflow-y-auto">
         <h2 class="text-3xl font-bold text-white">Loading...</h2>
     </main>
 </div>
 
+<script>
+    lucide.createIcons();
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menu-toggle');
+    const content = document.getElementById('admin-content');
+
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+        sidebar.classList.toggle('hidden');
+        sidebar.classList.toggle('flex');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (sidebar.classList.contains('open') && !sidebar.contains(e.target)) {
+            sidebar.classList.remove('open');
+            sidebar.classList.add('hidden');
+            sidebar.classList.remove('flex');
+        }
+    });
+
+    document.querySelectorAll('.sidebar-link').forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth < 768) {
+                sidebar.classList.remove('open');
+                sidebar.classList.add('hidden');
+                sidebar.classList.remove('flex');
+            }
+        });
+    });
+</script>
 <script src="js/admin.js"></script>
 </body>
 </html>
