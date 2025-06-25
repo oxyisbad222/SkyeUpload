@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     async function refreshMedia() {
-        console.log("Refreshing media library...");
         mediaLibraryCache = null;
         if (window.location.hash === '' || window.location.hash === '#home') {
             await renderHome();
@@ -61,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>`;
         } catch (error) {
-            console.error("Failed to render home:", error);
             mediaLibraryCache = null;
             content.innerHTML = `<div class="p-4 bg-red-900 text-red-200 rounded-lg text-center"><p class="font-bold">Connection Error</p><p class="text-sm">${error.message} Please pull down to refresh.</p></div>`;
         }
@@ -96,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
-            if (!response.ok) throw new Error('Search failed');
             const results = await response.json();
 
             if (results.movies.length === 0 && results.tvShows.length === 0) {
@@ -124,29 +121,15 @@ document.addEventListener('DOMContentLoaded', () => {
             <div id="request-status" class="mt-6"></div>`;
     };
     
-    const renderSettings = async () => {
+    const renderSettings = () => {
          content.innerHTML = `
             <h1 class="text-3xl font-bold mb-6">Settings</h1>
              <div class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <p id="app-version" class="text-sm">App Version: ...</p>
+                    <p class="text-sm">App Version: 1.4.0</p>
                     <p class="text-xs text-gray-400 mt-1">Developed by Skye</p>
                 </div>
-                <div class="bg-gray-800 p-4 rounded-lg">
-                    <h3 class="font-semibold mb-2">Storage</h3>
-                    <p id="storage-info" class="text-sm text-gray-400">Loading storage details...</p>
-                </div>
             </div>`;
-        
-        try {
-            const response = await fetch(`${API_URL}/api/settings`);
-            const settings = await response.json();
-            document.getElementById('app-version').textContent = `App Version: ${settings.clientVersion}`;
-            document.getElementById('storage-info').textContent = `Using ${settings.storageSolution}. Capacity: ${settings.storageCapacity}.`;
-        } catch (error) {
-            document.getElementById('app-version').textContent = `App Version: 1.3.0`;
-            document.getElementById('storage-info').textContent = 'Could not fetch storage details.';
-        }
     };
 
     function showDetailsView(item) {
@@ -188,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
-        const videoSrc = `${API_URL}${item.filePath}`;
+        const videoSrc = `${API_URL}/api/stream/${item.id}`;
 
         modal.innerHTML = `
             <div class="modal-content">
