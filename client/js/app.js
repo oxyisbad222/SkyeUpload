@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    // const API_URL = 'https://skyeupload.fly.dev'; // REMOVED: No longer needed.
+    const API_URL = 'https://skyeupload.fly.dev'; // RESTORED: Hardcoded API URL
     let mediaLibraryCache = null;
     let searchDebounceTimer;
     let activePlayer = null;
@@ -43,8 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `<div class="p-4 text-center"><h1 class="text-2xl font-bold">Loading Library...</h1></div>`;
         try {
             if (!mediaLibraryCache) {
-                 // Use a relative path for the API call
-                 const response = await fetch(`/api/media`);
+                 const response = await fetch(`${API_URL}/api/media`);
                  if (!response.ok) throw new Error(`Server connection failed.`);
                  mediaLibraryCache = await response.json();
             }
@@ -95,8 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // Use a relative path for the API call
-            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
             const results = await response.json();
 
             if (results.movies.length === 0 && results.tvShows.length === 0) {
@@ -174,8 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
-        // Use a relative path for the video source
-        const videoSrc = `/api/stream/${item.id}`;
+        const videoSrc = `${API_URL}/api/stream/${item.id}`;
 
         modal.innerHTML = `
             <div class="modal-content">
@@ -211,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const { id, type } = mediaItemEl.dataset;
             let item;
             if (mediaLibraryCache) {
-                 // The media item's type from the server is 'movie' or 'tvShow'
                  const library = type === 'movie' ? mediaLibraryCache.movies : mediaLibraryCache.tvShows;
                  item = library.find(i => i.id == id);
             }
@@ -230,8 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.disabled = true;
             button.textContent = 'Submitting...';
             try {
-                // Use a relative path for the API call
-                const response = await fetch(`/api/requests`, {
+                const response = await fetch(`${API_URL}/api/requests`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, details }),
@@ -250,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Router Logic ---
     const routes = {
         '#home': renderHome,
         '#search': renderSearch,
@@ -268,6 +262,5 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.addEventListener('hashchange', router);
     
-    // Initial load
     router();
 });
