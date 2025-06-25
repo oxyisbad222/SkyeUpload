@@ -18,21 +18,25 @@ async function startServer() {
         console.warn('WARNING: TMDB_API_KEY is not set. Metadata fetching will be disabled.');
     }
 
-    const trackers = [
-        'udp://tracker.opentrackr.org:1337/announce',
-        'udp://open.demonii.com:1337/announce',
-        'udp://tracker.openbittorrent.com:6969/announce',
-        'udp://tracker.torrent.eu.org:451/announce',
-    ];
-
-    // --- CORRECTED CORS Configuration ---
+    let trackers = [];
+    try {
+        const trackerData = fs.readFileSync(path.join(__dirname, 'best.txt'), 'utf8');
+        trackers = trackerData.split('\n').filter(t => t.trim() !== '');
+        console.log(`Loaded ${trackers.length} trackers.`);
+    } catch (error) {
+        console.warn('Could not read best.txt, using default trackers.');
+        trackers = [
+            'udp://tracker.opentrackr.org:1337/announce',
+            'udp://open.demonii.com:1337/announce',
+        ];
+    }
+    
     const allowedOrigins = [
         'https://skye-upload-admin.vercel.app',
         'https://skye-upload.vercel.app'
     ];
     const corsOptions = {
         origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl) or from whitelisted origins.
             if (!origin || allowedOrigins.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
@@ -135,59 +139,86 @@ async function startServer() {
 
     const apiRouter = express.Router();
 
-    apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
-        const { title, type, genre, url, source_type, batch_links } = req.body;
-        
-        if (source_type === 'batch-link') {
-            if (!batch_links) return res.status(400).json({ message: 'No links provided for batch upload.' });
-            
-            const links = batch_links.split('\n').filter(link => link.trim() !== '');
-            console.log(`[Batch] Received ${links.length} links for processing.`);
+    apiRouter.post('/admin/torrent-info', (req, res) => {
+        const { magnet } = req.body;
+        if (!magnet) return res.status(400).json({ message: 'Magnet link is required.' });
 
-            for (const link of links) {
-                let guessedTitle = 'Unknown Media';
-                try {
-                     guessedTitle = path.basename(new URL(link).pathname).replace(/[\._]/g, ' ').replace(/\.mp4/i, '');
-                } catch {}
-                downloadFromLink(link, guessedTitle, 'movie');
+        const torrent = client.add(magnet, { path: uploadDir, announce: trackers });
+        
+        torrent.on('metadata', () => {
+            const files = torrent.files.map(file => ({ name: file.name, length: file.length }));
+            res.status(200).json({ files });
+            client.remove(torrent.infoHash);
+        });
+
+        setTimeout(() => {
+            if (!torrent.metadata) {
+                res.status(408).json({ message: 'Timeout fetching torrent metadata. Check magnet link or try again.'});
+                client.remove(torrent.infoHash);
             }
-            return res.status(202).json({ message: `${links.length} links are being processed in the background.` });
+        }, 20000);
+    });
+
+    apiRouter.post('/admin/upload', upload.single('mediafile'), async (req, res) => {
+        const { title, type, url, source_type, batch_links, selectedFiles } = req.body;
+
+        if (source_type === 'batch-link') {
+            if (!batch_links) return res.status(400).json({ message: 'No links provided.' });
+            const links = batch_links.split('\n').filter(link => link.trim() !== '');
+            links.forEach(link => {
+                let guessedTitle = path.basename(new URL(link).pathname).replace(/[\._]/g, ' ').replace(/\.mp4/i, '');
+                downloadFromLink(link, guessedTitle, 'movie');
+            });
+            return res.status(202).json({ message: `${links.length} links processing.` });
+        }
+
+        if (source_type === 'magnet') {
+            const torrentOptions = { path: uploadDir, announce: trackers };
+            const torrent = client.add(url, torrentOptions);
+            
+            torrent.on('ready', () => {
+                torrent.files.forEach(file => file.deselect());
+
+                const filesToDownload = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
+                filesToDownload.forEach(index => {
+                    const file = torrent.files[parseInt(index)];
+                    if (file) {
+                        file.select();
+                        const guessedTitle = title || file.name.replace(/[\._]/g, ' ').replace(/\.mp4|\.mkv/i, '');
+                        const mediaType = type || (file.name.toLowerCase().includes('s0') ? 'tvShow' : 'movie');
+
+                        fetchTmdbMetadata(guessedTitle, mediaType).then(metadata => {
+                             addMediaToLibrary({
+                                id: Date.now() + parseInt(index), title: guessedTitle, type: mediaType,
+                                poster_path: metadata?.poster_path, overview: metadata?.overview,
+                                release_date: metadata?.release_date || metadata?.first_air_date,
+                                filePath: `/api/stream/${torrent.infoHash}/${index}`, streamType: 'torrent',
+                                infoHash: torrent.infoHash, fileIndex: index, addedAt: Date.now()
+                            });
+                        });
+                    }
+                });
+            });
+            return res.status(202).json({ message: `Selected torrent files are being downloaded.` });
         }
         
-        if (!title || !type) return res.status(400).json({ message: 'Title and type are required.' });
-        const metadata = await fetchTmdbMetadata(title, type);
-
         if (source_type === 'file' && req.file) {
+            const metadata = await fetchTmdbMetadata(title, type);
             addMediaToLibrary({
-                id: Date.now(), title, type, genre: genre || "Uncategorized",
+                id: Date.now(), title, type,
                 poster_path: metadata?.poster_path, overview: metadata?.overview,
                 release_date: metadata?.release_date || metadata?.first_air_date,
                 filePath: `/uploads/${req.file.filename}`, streamType: 'file'
             });
             return res.status(201).json({ message: 'File uploaded successfully!'});
-        } else if (source_type === 'magnet' && url) {
-            const torrentOptions = { path: uploadDir, announce: trackers };
-            const torrent = client.add(url, torrentOptions);
-            torrent.on('ready', () => {
-                const file = torrent.files.reduce((a, b) => a.length > b.length ? a : b);
-                const fileIndex = torrent.files.indexOf(file);
-                addMediaToLibrary({
-                    id: Date.now(), title, type, genre: genre || "Uncategorized",
-                    poster_path: metadata?.poster_path, overview: metadata?.overview,
-                    release_date: metadata?.release_date || metadata?.first_air_date,
-                    filePath: `/api/stream/${torrent.infoHash}/${fileIndex}`, streamType: 'torrent',
-                    infoHash: torrent.infoHash, fileIndex: fileIndex, addedAt: Date.now()
-                });
-            });
-            return res.status(202).json({ message: `"${title}" is processing and will be available.` });
-        } else {
-            return res.status(400).json({ message: 'Invalid request.' });
         }
+        
+        return res.status(400).json({ message: 'Invalid request.' });
     });
 
     apiRouter.get('/stream/:infoHash/:fileIndex', (req, res) => {
         const torrent = client.get(req.params.infoHash);
-        if (!torrent || !torrent.ready) return res.status(404).send('Torrent not ready for streaming.');
+        if (!torrent || !torrent.ready) return res.status(404).send('Torrent not ready.');
         const file = torrent.files[parseInt(req.params.fileIndex, 10)];
         if (!file) return res.status(404).send('File not found in torrent.');
         
@@ -217,19 +248,13 @@ async function startServer() {
         const library = type === 'movies' ? mediaLibrary.movies : mediaLibrary.tvShows;
         const itemIndex = library.findIndex(item => item.id === numericId);
 
-        if (itemIndex === -1) {
-            return res.status(404).json({ message: 'Media not found' });
-        }
-
+        if (itemIndex === -1) return res.status(404).json({ message: 'Media not found' });
+        
         const item = library[itemIndex];
 
         if (item.streamType === 'torrent') {
             const torrent = client.get(item.infoHash);
-            if (torrent) {
-                client.remove(torrent.infoHash, () => {
-                    console.log(`[Delete] Removed torrent: ${item.title}`);
-                });
-            }
+            if (torrent) client.remove(torrent.infoHash, () => console.log(`[Delete] Removed torrent: ${item.title}`));
         } else if (item.streamType === 'file') {
             const filePath = path.join(uploadDir, path.basename(item.filePath));
             if (fs.existsSync(filePath)) {
@@ -242,7 +267,6 @@ async function startServer() {
 
         library.splice(itemIndex, 1);
         writeDb({ mediaLibrary, contentRequests });
-
         res.status(200).json({ message: `Successfully deleted "${item.title}"` });
     });
 
@@ -285,7 +309,7 @@ async function startServer() {
             downloadSpeed: (t.downloadSpeed / 1024 / 1024).toFixed(2) + ' MB/s', peers: t.numPeers
         }));
         res.json({
-            status: 'online', uptime: `${Math.floor(process.uptime())}s`, version: '1.0.0',
+            status: 'online', uptime: `${Math.floor(process.uptime())}s`,
             requests_pending: contentRequests.length,
             movies_hosted: mediaLibrary.movies.length,
             shows_hosted: mediaLibrary.tvShows.length,
@@ -295,56 +319,31 @@ async function startServer() {
         });
     });
     
+    apiRouter.get('/settings', (req, res) => {
+        res.json({
+            clientVersion: '1.3.0',
+            storageSolution: 'Local Volume',
+            storageCapacity: '10GB (Fly.io default)',
+        });
+    });
+    
     app.use('/api', apiRouter);
 
-    // --- Improved Torrent Cleanup ---
     setInterval(() => {
         console.log('[Maintenance] Checking for completed torrents to remove...');
-        const torrentsToRemove = [];
         client.torrents.forEach(torrent => {
             if (torrent.done) {
-                // If the torrent is done, mark it with a timestamp
-                if (!torrent.doneTimestamp) {
-                    torrent.doneTimestamp = Date.now();
-                }
-
-                // If it has been 'done' for more than the grace period, remove it
-                if (Date.now() - torrent.doneTimestamp > (1000 * 60 * 30)) { // 30 min grace period
-                    torrentsToRemove.push(torrent);
+                if (!torrent.doneTimestamp) torrent.doneTimestamp = Date.now();
+                if (Date.now() - torrent.doneTimestamp > (1000 * 60 * 30)) {
+                    console.log(`[Maintenance] Removing completed torrent: ${torrent.name}`);
+                    client.remove(torrent.infoHash, (err) => {
+                        if (err) console.error(`[Maintenance] Error removing torrent: ${err.message}`);
+                    });
                 }
             }
         });
+    }, 1000 * 60 * 5);
 
-        if (torrentsToRemove.length > 0) {
-            console.log(`[Maintenance] Found ${torrentsToRemove.length} torrent(s) to remove.`);
-            let dbChanged = false;
-            torrentsToRemove.forEach(torrent => {
-                console.log(`[Maintenance] Removing torrent: ${torrent.name} (${torrent.infoHash})`);
-
-                // Remove from webtorrent client
-                client.remove(torrent.infoHash, (err) => {
-                    if (err) console.error(`[Maintenance] Error removing torrent: ${err.message}`);
-                });
-
-                // Remove from database by filtering
-                const movieCount = mediaLibrary.movies.length;
-                const showCount = mediaLibrary.tvShows.length;
-                mediaLibrary.movies = mediaLibrary.movies.filter(m => m.infoHash !== torrent.infoHash);
-                mediaLibrary.tvShows = mediaLibrary.tvShows.filter(t => t.infoHash !== torrent.infoHash);
-
-                if (mediaLibrary.movies.length < movieCount || mediaLibrary.tvShows.length < showCount) {
-                    dbChanged = true;
-                }
-            });
-            
-            // Write the updated DB to disk if any items were removed
-            if (dbChanged) {
-                writeDb({ mediaLibrary, contentRequests });
-            }
-        }
-    }, 1000 * 60 * 5); // Check every 5 minutes
-
-    // --- Global Error Handler ---
     app.use((err, req, res, next) => {
         console.error("Unhandled error caught:", err);
         res.status(500).json({ message: 'An unexpected server error occurred.', error: err.message });
