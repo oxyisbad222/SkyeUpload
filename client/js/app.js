@@ -2,12 +2,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    const API_URL = 'https://skyeupload.fly.dev'; // Base URL of your backend
+    const API_URL = 'https://skyeupload.fly.dev';
     let mediaLibraryCache = null;
     let searchDebounceTimer;
     let activePlayer = null;
 
-    // --- Pull To Refresh Logic ---
     const pptr = document.getElementById('pull-to-refresh');
     let touchstartY = 0;
     document.body.addEventListener('touchstart', e => {
@@ -27,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // --- Refresh Data ---
     async function refreshMedia() {
         console.log("Refreshing media library...");
         mediaLibraryCache = null;
@@ -36,13 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Helper to create media item HTML ---
     const createMediaHtml = (item) => `
         <div class="media-item" data-id="${item.id}" data-type="${item.type}">
             <img src="${item.poster_path ? 'https://image.tmdb.org/t/p/w500' + item.poster_path : 'https://placehold.co/500x750/1f2937/9ca3af?text=' + encodeURIComponent(item.title)}" alt="${item.title}" loading="lazy">
         </div>`;
 
-    // --- RENDER FUNCTIONS ---
     const renderHome = async () => {
         content.innerHTML = `<div class="p-4 text-center"><h1 class="text-2xl font-bold">Loading Library...</h1></div>`;
         try {
@@ -128,18 +124,31 @@ document.addEventListener('DOMContentLoaded', () => {
             <div id="request-status" class="mt-6"></div>`;
     };
     
-    const renderSettings = () => {
+    const renderSettings = async () => {
          content.innerHTML = `
             <h1 class="text-3xl font-bold mb-6">Settings</h1>
              <div class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-lg">
-                    <p class="text-sm">App Version: 1.2.0</p>
+                    <p id="app-version" class="text-sm">App Version: ...</p>
                     <p class="text-xs text-gray-400 mt-1">Developed by Skye</p>
                 </div>
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <h3 class="font-semibold mb-2">Storage</h3>
+                    <p id="storage-info" class="text-sm text-gray-400">Loading storage details...</p>
+                </div>
             </div>`;
+        
+        try {
+            const response = await fetch(`${API_URL}/api/settings`);
+            const settings = await response.json();
+            document.getElementById('app-version').textContent = `App Version: ${settings.clientVersion}`;
+            document.getElementById('storage-info').textContent = `Using ${settings.storageSolution}. Capacity: ${settings.storageCapacity}.`;
+        } catch (error) {
+            document.getElementById('app-version').textContent = `App Version: 1.3.0`;
+            document.getElementById('storage-info').textContent = 'Could not fetch storage details.';
+        }
     };
 
-    // --- MODALS AND PLAYER ---
     function showDetailsView(item) {
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
@@ -209,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.querySelector('.close-modal-btn').addEventListener('click', closeModal);
     }
     
-    // --- EVENT LISTENERS & ROUTER ---
     content.addEventListener('click', (e) => {
         const mediaItemEl = e.target.closest('.media-item');
         if (mediaItemEl) {
@@ -264,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const renderFunction = routes[path] || renderHome;
         renderFunction();
         updateActiveNav(path);
+        lucide.createIcons();
     };
     const updateActiveNav = (path) => { navItems.forEach(item => { item.classList.toggle('active', item.getAttribute('href') === path); }); };
     
