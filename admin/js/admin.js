@@ -7,128 +7,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderUpload = () => {
         content.innerHTML = `
             <h2 class="text-3xl font-bold text-white mb-6">Upload Content</h2>
-            <div id="upload-container" class="bg-gray-800 p-6 md:p-8 rounded-lg shadow-lg">
+            <div class="bg-gray-800 p-6 md:p-8 rounded-lg shadow-lg">
                 <form id="upload-form" class="space-y-6">
-                    <div id="upload-main-fields">
-                        <div id="single-upload-fields">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="content-title" class="block text-sm font-medium text-gray-300 mb-2">Title</label>
-                                    <input type="text" id="content-title" name="title" class="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., My Home Movie">
-                                </div>
-                                <div>
-                                    <label for="media-type" class="block text-sm font-medium text-gray-300 mb-2">Media Type</label>
-                                    <select id="media-type" name="type" class="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500">
-                                        <option value="movie">Movie</option>
-                                        <option value="tvShow">TV Show</option>
-                                    </select>
-                                </div>
-                            </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="content-title" class="block text-sm font-medium text-gray-300 mb-2">Title</label>
+                            <input type="text" id="content-title" name="title" class="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., My Home Movie" required>
                         </div>
                         <div>
-                            <label for="upload-type" class="block text-sm font-medium text-gray-300 mb-2 mt-6">Source Type</label>
-                            <select id="upload-type" name="source_type" class="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="file" selected>Upload File</option>
-                                <option value="magnet">Magnet Link</option>
-                                <option value="batch-link">Batch Direct Links</option>
+                            <label for="media-type" class="block text-sm font-medium text-gray-300 mb-2">Media Type</label>
+                            <select id="media-type" name="type" class="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="movie">Movie</option>
+                                <option value="tvShow">TV Show</option>
                             </select>
                         </div>
-                        <div id="upload-input-area" class="pt-4"></div>
                     </div>
-                    <div id="torrent-selection-area"></div>
+                    <div>
+                        <label for="file-upload" class="block text-sm font-medium text-gray-300 mb-2">Media File</label>
+                        <input type="file" id="file-upload" name="mediafile" class="w-full text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-600 file:text-white hover:file:bg-gray-500" required>
+                    </div>
                     <div id="upload-status" class="pt-2"></div>
-                    <div id="form-actions" class="flex justify-end pt-4"></div>
+                    <div class="flex justify-end pt-4">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-500 text-white font-bold py-3 px-6 rounded-md flex items-center gap-2"><i data-lucide="upload-cloud"></i>Upload to Cloud</button>
+                    </div>
                 </form>
             </div>
         `;
-        updateUploadInput('file');
-        lucide.createIcons();
-    };
-
-    const updateUploadInput = (type) => {
-        const container = document.getElementById('upload-input-area');
-        const singleFields = document.getElementById('single-upload-fields');
-        const formActions = document.getElementById('form-actions');
-        if (!container || !singleFields || !formActions) return;
-
-        let inputHtml = '';
-        let actionsHtml = `<button type="submit" class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-500 text-white font-bold py-3 px-6 rounded-md flex items-center gap-2"><i data-lucide="library"></i>Add to Library</button>`;
-        
-        singleFields.style.display = 'block';
-        document.getElementById('torrent-selection-area').innerHTML = '';
-
-        if (type === 'file') {
-            inputHtml = `<label for="file-upload" class="block text-sm font-medium text-gray-300 mb-2">Media File</label><input type="file" id="file-upload" name="mediafile" class="w-full text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-600 file:text-white hover:file:bg-gray-500" required>`;
-        } else if (type === 'magnet') {
-            inputHtml = `<label for="link-upload" class="block text-sm font-medium text-gray-300 mb-2">Magnet Link</label><input type="text" id="link-upload" name="url" class="w-full bg-gray-700 p-3 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="magnet:?xt=urn:btih:..." required>`;
-            actionsHtml = `<button type="button" id="fetch-torrent-files" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-md flex items-center gap-2"><i data-lucide="list"></i>Fetch Files</button>`;
-        } else if (type === 'batch-link') {
-            singleFields.style.display = 'none';
-            inputHtml = `<label for="batch-links" class="block text-sm font-medium text-gray-300 mb-2">Direct Download Links (one per line)</label><textarea id="batch-links" name="batch_links" class="w-full bg-gray-700 p-3 h-48 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="https://.../movie1.mp4\nhttps://.../movie2.mp4" required></textarea>`;
-        }
-        container.innerHTML = inputHtml;
-        formActions.innerHTML = actionsHtml;
         lucide.createIcons();
     };
     
-    const handleFetchTorrentFiles = async () => {
-        const magnetLink = document.getElementById('link-upload').value;
-        const statusDiv = document.getElementById('upload-status');
-        const button = document.getElementById('fetch-torrent-files');
-        if (!magnetLink) {
-            statusDiv.innerHTML = `<p class="text-red-400">Please enter a magnet link.</p>`;
-            return;
-        }
-
-        button.disabled = true;
-        button.innerHTML = '<i data-lucide="loader" class="animate-spin"></i> Fetching...';
-        lucide.createIcons();
-        statusDiv.innerHTML = `<p class="text-blue-400">Requesting torrent info from server...</p>`;
-
-        try {
-            const response = await fetch(`${API_URL}/admin/torrent-info`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ magnet: magnetLink })
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.message || 'Failed to fetch torrent info.');
-            
-            renderTorrentFileList(result.files);
-            statusDiv.innerHTML = `<p class="text-green-400">Found ${result.files.length} files. Please select which ones to download.</p>`;
-
-        } catch (error) {
-            statusDiv.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
-            button.disabled = false;
-            button.innerHTML = '<i data-lucide="list"></i> Fetch Files';
-            lucide.createIcons();
-        }
-    };
-
-    const renderTorrentFileList = (files) => {
-        const selectionArea = document.getElementById('torrent-selection-area');
-        const mainFields = document.getElementById('upload-main-fields');
-        const formActions = document.getElementById('form-actions');
-
-        const filesHtml = files.map((file, index) => `
-            <div class="flex items-center justify-between bg-gray-700 p-3 rounded-md">
-                <label for="file-${index}" class="flex-grow text-sm text-gray-300 cursor-pointer">
-                    <input type="checkbox" id="file-${index}" name="selectedFiles" value="${index}" class="mr-3 h-4 w-4 rounded border-gray-500 bg-gray-600 text-indigo-600 focus:ring-indigo-500">
-                    ${file.name}
-                </label>
-                <span class="text-xs text-gray-400">${(file.length / 1024 / 1024).toFixed(2)} MB</span>
-            </div>
-        `).join('');
-
-        selectionArea.innerHTML = `
-            <h3 class="text-lg font-semibold text-white mb-4">Select Files to Download</h3>
-            <div class="space-y-2 max-h-60 overflow-y-auto pr-2">${filesHtml}</div>`;
-        
-        mainFields.style.display = 'none';
-        formActions.innerHTML = `<button type="submit" class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-500 text-white font-bold py-3 px-6 rounded-md flex items-center gap-2"><i data-lucide="download-cloud"></i>Download Selected</button>`;
-        lucide.createIcons();
-    };
-
     const renderManageContent = async () => {
         content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading Content...</h2>`;
         try {
@@ -142,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <img src="${item.poster_path ? 'https://image.tmdb.org/t/p/w92' + item.poster_path : 'https://placehold.co/40x60/1f2937/9ca3af?text=N/A'}" class="w-10 h-15 rounded-md hidden sm:block" alt="poster">
                         <span class="font-medium">${item.title}</span>
                     </td>
-                    <td class="p-4 text-gray-400 capitalize hidden md:table-cell">${item.streamType}</td>
+                    <td class="p-4 text-gray-400 capitalize hidden md:table-cell">${item.streamType === 's3' ? item.storageDetails.storageType : item.streamType}</td>
                     <td class="p-4 text-right">
                         <button class="delete-media-btn text-red-400 hover:text-red-300"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                     </td>
@@ -156,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <thead class="bg-gray-700 text-xs uppercase font-semibold">
                             <tr>
                                 <th class="p-4">Title</th>
-                                <th class="p-4 hidden md:table-cell">Source</th>
+                                <th class="p-4 hidden md:table-cell">Storage</th>
                                 <th class="p-4 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -193,32 +100,56 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { content.innerHTML = `<div class="bg-red-900 p-4 rounded-lg">${error.message}</div>`; }
         lucide.createIcons();
     };
+    
+    const formatBytes = (bytes, decimals = 2) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    };
 
     const renderStatus = async () => {
         try {
+            if (window.location.hash !== '#status') return;
             const response = await fetch(`${API_URL}/admin/status`);
             if (!response.ok) throw new Error('Server not responding');
             const status = await response.json();
 
-            if(window.location.hash !== '#status') return;
+            const storjUsage = status.storageUsage?.storj || 0;
+            const b2Usage = status.storageUsage?.b2 || 0;
+            const storjCapacity = 25 * 1024 * 1024 * 1024;
+            const b2Capacity = 10 * 1024 * 1024 * 1024;
 
-            const torrentsHtml = status.torrents.map(t => `
-                <div class="bg-gray-700 p-4 rounded-md">
-                    <p class="font-semibold truncate text-sm">${t.name || t.infoHash}</p>
-                    <div class="w-full bg-gray-600 rounded-full h-2.5 mt-2"><div class="bg-indigo-500 h-2.5 rounded-full" style="width: ${t.progress}%"></div></div>
-                    <div class="text-xs text-gray-400 mt-1 flex justify-between"><span>${t.progress}%</span><span>${t.downloadSpeed}</span><span>Peers: ${t.peers}</span></div>
-                </div>`).join('');
+            const storjPercent = Math.min((storjUsage / storjCapacity) * 100, 100).toFixed(2);
+            const b2Percent = Math.min((b2Usage / b2Capacity) * 100, 100).toFixed(2);
 
             content.innerHTML = `
                 <h2 class="text-3xl font-bold text-white mb-6">Server Status</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-                    <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Status</h3><p class="text-xl font-semibold text-green-400">Online</p></div>
-                    <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Files Hosted</h3><p class="text-xl font-semibold">${status.movies_hosted} M / ${status.shows_hosted} S</p></div>
-                    <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Requests</h3><p class="text-xl font-semibold">${status.requests_pending}</p></div>
-                    <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">DL Speed</h3><p class="text-xl font-semibold">${status.total_download_speed}</p></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="font-semibold text-lg mb-2">Primary Storage (Storj)</h3>
+                        <p class="text-sm text-gray-400">${formatBytes(storjUsage)} / ${formatBytes(storjCapacity)}</p>
+                        <div class="w-full bg-gray-700 rounded-full h-4 mt-2">
+                            <div class="bg-blue-600 h-4 rounded-full" style="width: ${storjPercent}%"></div>
+                        </div>
+                        <p class="text-right text-sm mt-1">${storjPercent}% Full</p>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <h3 class="font-semibold text-lg mb-2">Overflow Storage (Backblaze B2)</h3>
+                        <p class="text-sm text-gray-400">${formatBytes(b2Usage)} / ${formatBytes(b2Capacity)}</p>
+                        <div class="w-full bg-gray-700 rounded-full h-4 mt-2">
+                             <div class="bg-orange-500 h-4 rounded-full" style="width: ${b2Percent}%"></div>
+                        </div>
+                        <p class="text-right text-sm mt-1">${b2Percent}% Full</p>
+                    </div>
                 </div>
-                <h3 class="text-2xl font-bold text-white mb-4">Active Torrents (${status.torrents_active})</h3>
-                <div class="space-y-4">${torrentsHtml || '<p class="text-gray-400">No active torrents.</p>'}</div>`;
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                     <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Server Status</h3><p class="text-xl font-semibold text-green-400">Online</p></div>
+                     <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Movies Hosted</h3><p class="text-xl font-semibold">${status.movies_hosted}</p></div>
+                     <div class="bg-gray-800 p-4 rounded-lg"><h3 class="text-gray-400 text-sm font-medium">Shows Hosted</h3><p class="text-xl font-semibold">${status.shows_hosted}</p></div>
+                </div>`;
         } catch (error) {
             console.error("Status fetch error:", error);
             content.innerHTML = `<div class="bg-red-900 text-red-200 p-4 rounded-lg"><p class="font-bold">Server Offline</p><p>Could not connect.</p></div>`;
@@ -234,7 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderFunc();
 
         if (hash === '#status') {
-            statusInterval = setInterval(renderStatus, 3000);
+            renderStatus();
+            statusInterval = setInterval(renderStatus, 10000);
         }
         updateActiveLink(hash);
     };
@@ -254,27 +186,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('hashchange', router);
     
-    document.body.addEventListener('change', e => {
-        if (e.target.id === 'upload-type') updateUploadInput(e.target.value);
-    });
-
-    document.body.addEventListener('click', e => {
-        if (e.target.closest('#fetch-torrent-files')) {
-            handleFetchTorrentFiles();
-        }
-    });
-
     document.body.addEventListener('submit', async e => {
         if (e.target.id === 'upload-form') {
             e.preventDefault();
             const form = e.target;
-            const button = form.querySelector('button[type="submit"], button[type="button"]');
+            const button = form.querySelector('button[type="submit"]');
             const statusDiv = document.getElementById('upload-status');
             
             button.disabled = true;
-            button.innerHTML = '<i data-lucide="loader" class="animate-spin"></i> Processing...';
+            button.innerHTML = '<i data-lucide="loader" class="animate-spin"></i> Uploading...';
             lucide.createIcons();
-            statusDiv.innerHTML = `<p class="text-blue-400">Sending request to server...</p>`;
+            statusDiv.innerHTML = `<p class="text-blue-400">Sending file to cloud storage. This may take a moment...</p>`;
 
             const formData = new FormData(form);
             
@@ -295,7 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 statusDiv.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
                 button.disabled = false;
-                button.innerHTML = 'Add to Library';
+                button.innerHTML = '<i data-lucide="upload-cloud"></i> Upload to Cloud';
+                lucide.createIcons();
             }
         }
     });
