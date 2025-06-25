@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
-    const API_URL = 'https://skyeupload.fly.dev/api';
+    // const API_URL = 'https://skyeupload.fly.dev/api'; // REMOVED: No longer needed
     let statusInterval;
 
     const renderUpload = () => {
@@ -39,7 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderManageContent = async () => {
         content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading Content...</h2>`;
         try {
-            const response = await fetch(`${API_URL}/media`);
+            // Use a relative path for the API call
+            const response = await fetch(`/api/media`);
             const { movies, tvShows } = await response.json();
             const allContent = [...movies.map(m => ({ ...m, mediaType: 'movies' })), ...tvShows.map(s => ({ ...s, mediaType: 'tvShows' }))];
 
@@ -79,7 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderRequests = async () => {
         content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading Requests...</h2>`;
         try {
-            const response = await fetch(`${API_URL}/admin/requests`);
+            // Use a relative path for the API call
+            const response = await fetch(`/api/admin/requests`);
             const requests = await response.json();
             const requestsHtml = requests.map(req => `
                 <tr class="border-b border-gray-700" data-request-id="${req.id}">
@@ -113,7 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderStatus = async () => {
         try {
             if (window.location.hash !== '#status') return;
-            const response = await fetch(`${API_URL}/admin/status`);
+            // Use a relative path for the API call
+            const response = await fetch(`/api/admin/status`);
             if (!response.ok) throw new Error('Server not responding');
             const status = await response.json();
 
@@ -156,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    // --- Router Logic ---
     const router = () => {
         clearInterval(statusInterval);
         const hash = window.location.hash || '#upload';
@@ -186,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('hashchange', router);
     
+    // --- Event Listeners ---
     document.body.addEventListener('submit', async e => {
         if (e.target.id === 'upload-form') {
             e.preventDefault();
@@ -201,7 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(form);
             
             try {
-                const response = await fetch(`${API_URL}/admin/upload`, {
+                // Use a relative path for the API call
+                const response = await fetch(`/api/admin/upload`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -234,24 +240,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = requestRow.dataset.requestId;
             if (button.classList.contains('delete-btn')) {
                 if (confirm('Are you sure you want to delete this request?')) {
-                    await fetch(`${API_URL}/admin/requests/${id}`, { method: 'DELETE' });
+                    await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
                     requestRow.remove();
                 }
             } else if (button.classList.contains('fulfill-btn')) {
-                await fetch(`${API_URL}/admin/requests/${id}`, { method: 'PUT' });
+                await fetch(`/api/admin/requests/${id}`, { method: 'PUT' });
                 renderRequests();
             }
         } else if (mediaRow) {
             if (button.classList.contains('delete-media-btn')) {
                 const id = mediaRow.dataset.id;
-                const type = mediaRow.dataset.type;
+                const type = mediaRow.dataset.type; // 'movies' or 'tvShows'
                 if (confirm('Are you sure you want to delete this media? This cannot be undone.')) {
-                    await fetch(`${API_URL}/admin/media/${type}/${id}`, { method: 'DELETE' });
+                    await fetch(`/api/admin/media/${type}/${id}`, { method: 'DELETE' });
                     mediaRow.remove();
                 }
             }
         }
     });
     
+    // Initial load
     router();
 });
