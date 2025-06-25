@@ -1,7 +1,8 @@
 const express = require('express');
-const path = require('path');
+const path = path');
 const cors = require('cors');
 const multer = require('multer');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -14,6 +15,19 @@ async function startServer() {
     const client = new WebTorrent();
     const PORT = process.env.PORT || 3000;
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
+
+    const requiredEnv = [
+        'STORJ_ACCESS_KEY', 'STORJ_SECRET_KEY', 'STORJ_ENDPOINT', 'STORJ_BUCKET_NAME',
+        'B2_ACCESS_KEY', 'B2_SECRET_KEY', 'B2_ENDPOINT', 'B2_BUCKET_NAME'
+    ];
+    const missingEnv = requiredEnv.filter(v => !process.env[v]);
+
+    if (missingEnv.length > 0) {
+        console.error('FATAL ERROR: Missing required environment variables:');
+        missingEnv.forEach(v => console.error(`- ${v}`));
+        console.error('Please set these secrets in your Fly.io dashboard by following INSTRUCTIONS.md');
+        process.exit(1);
+    }
 
     const {
         STORJ_ACCESS_KEY, STORJ_SECRET_KEY, STORJ_ENDPOINT, STORJ_BUCKET_NAME,
