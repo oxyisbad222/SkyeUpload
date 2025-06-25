@@ -4,7 +4,7 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 async function startServer() {
@@ -33,21 +33,28 @@ async function startServer() {
         STORJ_ACCESS_KEY, STORJ_SECRET_KEY, STORJ_ENDPOINT, STORJ_BUCKET_NAME,
         B2_ACCESS_KEY, B2_SECRET_KEY, B2_ENDPOINT, B2_BUCKET_NAME
     } = process.env;
+    
+    let storjClient, b2Client;
 
-    const s3ConfigStorj = {
-        credentials: { accessKeyId: STORJ_ACCESS_KEY, secretAccessKey: STORJ_SECRET_KEY },
-        endpoint: `https://${STORJ_ENDPOINT}`,
-        region: 'us-east-1',
-    };
+    try {
+        const s3ConfigStorj = {
+            credentials: { accessKeyId: STORJ_ACCESS_KEY, secretAccessKey: STORJ_SECRET_KEY },
+            endpoint: `https://${STORJ_ENDPOINT}`,
+            region: 'us-east-1',
+        };
+        storjClient = new S3Client(s3ConfigStorj);
 
-    const s3ConfigB2 = {
-        credentials: { accessKeyId: B2_ACCESS_KEY, secretAccessKey: B2_SECRET_KEY },
-        endpoint: `https://${B2_ENDPOINT}`,
-        region: B2_ENDPOINT.split('.')[1],
-    };
-
-    const storjClient = new S3Client(s3ConfigStorj);
-    const b2Client = new S3Client(s3ConfigB2);
+        const s3ConfigB2 = {
+            credentials: { accessKeyId: B2_ACCESS_KEY, secretAccessKey: B2_SECRET_KEY },
+            endpoint: `https://${B2_ENDPOINT}`,
+            region: B2_ENDPOINT.split('.')[1],
+        };
+        b2Client = new S3Client(s3ConfigB2);
+    } catch (error) {
+        console.error('FATAL ERROR: Failed to initialize S3 clients. Check your endpoint and credential configuration.');
+        console.error(error);
+        process.exit(1);
+    }
     
     let trackers = [];
     try {
@@ -185,7 +192,7 @@ async function startServer() {
         const s3Client = storageType === 'storj' ? storjClient : b2Client;
         
         try {
-            const command = new PutObjectCommand({ Bucket: bucketName, Key: fileKey });
+            const command = new GetObjectCommand({ Bucket: bucketName, Key: fileKey });
             const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
             res.redirect(url);
         } catch (error) {
