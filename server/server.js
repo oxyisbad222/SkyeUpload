@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const cors = require('cors'); // Re-added for cross-origin requests
+const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -67,21 +67,8 @@ async function startServer() {
     }
 
     // --- CORS Configuration ---
-    // This is the critical fix. It allows your Vercel deployments to communicate with the server.
-    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
-    const corsOptions = {
-        origin: (origin, callback) => {
-            // Allow requests with no origin (like mobile apps or curl requests)
-            if (!origin || allowedOrigins.includes(origin)) {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
-        methods: ['GET', 'POST', 'PUT', 'DELETE'],
-        optionsSuccessStatus: 204
-    };
-    app.use(cors(corsOptions));
+    // This allows all origins. With the unified server, it's less critical, but good for flexibility.
+    app.use(cors());
     
     // --- Database Setup ---
     const dbPath = path.join('/data', 'database.json');
@@ -93,7 +80,8 @@ async function startServer() {
             if (!fs.existsSync('/data')) fs.mkdirSync('/data', { recursive: true });
             fs.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2));
             return defaultDb;
-        } catch (error) {
+        } catch (error)
+        {
             console.error("DB Read Error:", error);
             return { mediaLibrary: { movies: [], tvShows: [] }, contentRequests: [], storageUsage: { storj: 0, b2: 0 } };
         }
@@ -112,9 +100,11 @@ async function startServer() {
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-    // REMOVED Static file serving to restore original functionality
-    // app.use('/admin', express.static(path.join(__dirname, '../admin')));
-    // app.use(express.static(path.join(__dirname, '../client')));
+    // --- Static File Serving ---
+    // Serve the admin panel at /admin
+    app.use('/admin', express.static(path.join(__dirname, '../admin')));
+    // Serve the client app from the root
+    app.use(express.static(path.join(__dirname, '../client')));
 
 
     // --- Core Functions ---
@@ -292,8 +282,17 @@ async function startServer() {
 
     app.use('/api', apiRouter);
 
-    // This catch-all is removed as we are no longer serving static files.
-    // app.get('*', (req, res) => { ... });
+    // --- Catch-all for Client-side Routing ---
+    // This makes sure that if you refresh a page on the client app, the server still sends the main index.html file.
+    app.get('*', (req, res) => {
+        // We check if the request is for an admin sub-page and if not, we serve the client index.
+        if (!req.path.startsWith('/admin')) {
+            res.sendFile(path.join(__dirname, '../client/index.html'));
+        } else {
+            // Let the admin static serving handle it, or it will 404 if the file doesn't exist.
+            res.status(404).send('Not Found');
+        }
+    });
 
     // --- Server Start ---
     const server = app.listen(PORT, '0.0.0.0', () => {
