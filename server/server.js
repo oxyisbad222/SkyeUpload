@@ -76,7 +76,7 @@ async function startServer() {
             if (!origin || allowedOrigins.includes(origin)) {
                 callback(null, true);
             } else {
-                callback(new Error('Not allowed by CORS'));
+                callback(new Error(`Not allowed by CORS for origin: ${origin}`));
             }
         },
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -289,6 +289,10 @@ async function startServer() {
 
     // All API routes are handled here
     app.use('/api', apiRouter);
+    
+    app.get('/', (req, res) => {
+        res.send('SkyeUpload Server is online.');
+    });
 
     // --- Server Start ---
     const server = app.listen(PORT, '0.0.0.0', () => {
