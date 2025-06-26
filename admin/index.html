@@ -67,8 +67,9 @@
 </div>
 
 <script>
-    // Now it's safe to call lucide.createIcons() because the library is already loaded.
+    // This call is now safe because the lucide library is loaded in the <head>.
     lucide.createIcons();
+
     const sidebar = document.getElementById('sidebar');
     const menuToggle = document.getElementById('menu-toggle');
     const content = document.getElementById('admin-content');
