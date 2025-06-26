@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('app-content');
     const navItems = document.querySelectorAll('.nav-item');
-    const API_URL = 'https://skyeupload.fly.dev'; // RESTORED: Hardcoded API URL
+    // REMOVED: No longer need a hardcoded URL. API calls will be relative.
     let mediaLibraryCache = null;
     let searchDebounceTimer;
     let activePlayer = null;
@@ -43,7 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `<div class="p-4 text-center"><h1 class="text-2xl font-bold">Loading Library...</h1></div>`;
         try {
             if (!mediaLibraryCache) {
-                 const response = await fetch(`${API_URL}/api/media`);
+                 // Use a relative path for the API call
+                 const response = await fetch(`/api/media`);
                  if (!response.ok) throw new Error(`Server connection failed.`);
                  mediaLibraryCache = await response.json();
             }
@@ -94,7 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
+            // Use a relative path for the API call
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
             const results = await response.json();
 
             if (results.movies.length === 0 && results.tvShows.length === 0) {
@@ -172,7 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop video-modal';
-        const videoSrc = `${API_URL}/api/stream/${item.id}`;
+        // Use a relative path for the stream
+        const videoSrc = `/api/stream/${item.id}`;
 
         modal.innerHTML = `
             <div class="modal-content">
@@ -226,7 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
             button.disabled = true;
             button.textContent = 'Submitting...';
             try {
-                const response = await fetch(`${API_URL}/api/requests`, {
+                // Use a relative path for the API call
+                const response = await fetch(`/api/requests`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, details }),
