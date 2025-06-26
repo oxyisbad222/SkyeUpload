@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
-    // const API_URL = 'https://skyeupload.fly.dev/api'; // REMOVED: No longer needed
+    // REMOVED: API URL is no longer needed as all calls are relative.
     let statusInterval;
 
     const renderUpload = () => {
