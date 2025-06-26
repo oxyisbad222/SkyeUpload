@@ -67,8 +67,22 @@ async function startServer() {
     }
 
     // --- CORS Configuration ---
-    // Using a more open policy for debugging. This allows requests from ANY origin.
-    app.use(cors());
+    // This is the critical fix. It explicitly allows your Vercel deployments to communicate with the server.
+    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
+    const corsOptions = {
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl requests)
+            // or from our whitelisted origins.
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error(`Not allowed by CORS for origin: ${origin}`));
+            }
+        },
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        optionsSuccessStatus: 204
+    };
+    app.use(cors(corsOptions));
 
     // --- Middleware ---
     app.use(express.json({ limit: '10mb' }));
