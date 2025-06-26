@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('admin-content');
     const navLinks = document.querySelectorAll('.sidebar-link');
-    // REMOVED: API URL is no longer needed as all calls are relative.
+    // RESTORED: Hardcoded API URL to point to your Fly.io server.
+    const API_URL = 'https://skyeupload.fly.dev';
     let statusInterval;
 
     const renderUpload = () => {
@@ -39,8 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderManageContent = async () => {
         content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading Content...</h2>`;
         try {
-            // Use a relative path for the API call
-            const response = await fetch(`/api/media`);
+            // Point API call to the production server URL
+            const response = await fetch(`${API_URL}/api/media`);
             const { movies, tvShows } = await response.json();
             const allContent = [...movies.map(m => ({ ...m, mediaType: 'movies' })), ...tvShows.map(s => ({ ...s, mediaType: 'tvShows' }))];
 
@@ -80,8 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderRequests = async () => {
         content.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6">Loading Requests...</h2>`;
         try {
-            // Use a relative path for the API call
-            const response = await fetch(`/api/admin/requests`);
+            // Point API call to the production server URL
+            const response = await fetch(`${API_URL}/api/admin/requests`);
             const requests = await response.json();
             const requestsHtml = requests.map(req => `
                 <tr class="border-b border-gray-700" data-request-id="${req.id}">
@@ -115,8 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderStatus = async () => {
         try {
             if (window.location.hash !== '#status') return;
-            // Use a relative path for the API call
-            const response = await fetch(`/api/admin/status`);
+            // Point API call to the production server URL
+            const response = await fetch(`${API_URL}/api/admin/status`);
             if (!response.ok) throw new Error('Server not responding');
             const status = await response.json();
 
@@ -206,8 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(form);
             
             try {
-                // Use a relative path for the API call
-                const response = await fetch(`/api/admin/upload`, {
+                // Point API call to the production server URL
+                const response = await fetch(`${API_URL}/api/admin/upload`, {
                     method: 'POST',
                     body: formData,
                 });
@@ -240,10 +241,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = requestRow.dataset.requestId;
             if (button.classList.contains('delete-btn')) {
                 // TODO: Replace with a non-blocking custom modal for confirmation
-                await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
+                await fetch(`${API_URL}/api/admin/requests/${id}`, { method: 'DELETE' });
                 requestRow.remove();
             } else if (button.classList.contains('fulfill-btn')) {
-                await fetch(`/api/admin/requests/${id}`, { method: 'PUT' });
+                await fetch(`${API_URL}/api/admin/requests/${id}`, { method: 'PUT' });
                 renderRequests();
             }
         } else if (mediaRow) {
@@ -251,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = mediaRow.dataset.id;
                 const type = mediaRow.dataset.type; // 'movies' or 'tvShows'
                 // TODO: Replace with a non-blocking custom modal for confirmation
-                await fetch(`/api/admin/media/${type}/${id}`, { method: 'DELETE' });
+                await fetch(`${API_URL}/api/admin/media/${type}/${id}`, { method: 'DELETE' });
                 mediaRow.remove();
             }
         }
