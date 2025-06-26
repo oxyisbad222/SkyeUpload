@@ -239,10 +239,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (requestRow) {
             const id = requestRow.dataset.requestId;
             if (button.classList.contains('delete-btn')) {
-                if (confirm('Are you sure you want to delete this request?')) {
-                    await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
-                    requestRow.remove();
-                }
+                // TODO: Replace with a non-blocking custom modal for confirmation
+                await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
+                requestRow.remove();
             } else if (button.classList.contains('fulfill-btn')) {
                 await fetch(`/api/admin/requests/${id}`, { method: 'PUT' });
                 renderRequests();
@@ -251,10 +250,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (button.classList.contains('delete-media-btn')) {
                 const id = mediaRow.dataset.id;
                 const type = mediaRow.dataset.type; // 'movies' or 'tvShows'
-                if (confirm('Are you sure you want to delete this media? This cannot be undone.')) {
-                    await fetch(`/api/admin/media/${type}/${id}`, { method: 'DELETE' });
-                    mediaRow.remove();
-                }
+                // TODO: Replace with a non-blocking custom modal for confirmation
+                await fetch(`/api/admin/media/${type}/${id}`, { method: 'DELETE' });
+                mediaRow.remove();
             }
         }
     });
