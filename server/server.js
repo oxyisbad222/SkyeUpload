@@ -66,8 +66,25 @@ async function startServer() {
         trackers = ['udp://tracker.opentrackr.org:1337/announce'];
     }
 
+    // --- CORS Configuration ---
+    // This is the critical fix. It explicitly allows your Vercel deployments to communicate with the server.
+    const allowedOrigins = ['https://skye-upload-admin.vercel.app', 'https://skye-upload.vercel.app'];
+    const corsOptions = {
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl requests)
+            // or from our whitelisted origins.
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        optionsSuccessStatus: 204
+    };
+    app.use(cors(corsOptions));
+
     // --- Middleware ---
-    app.use(cors());
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
@@ -270,21 +287,8 @@ async function startServer() {
         res.status(201).json({ message: 'Request submitted.', request: newRequest });
     });
 
-    // --- Static & API Routing ---
-    // IMPORTANT: API routes must be defined *before* static routes.
+    // All API routes are handled here
     app.use('/api', apiRouter);
-
-    // Serve the admin panel at /admin
-    app.use('/admin', express.static(path.join(__dirname, '../admin')));
-    
-    // Serve the client app from the root
-    app.use(express.static(path.join(__dirname, '../client')));
-
-    // --- Client-side Routing Catch-all ---
-    // This handles SPA routing by sending the client's index.html for any non-API, non-file request.
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, '../client/index.html'));
-    });
 
     // --- Server Start ---
     const server = app.listen(PORT, '0.0.0.0', () => {
