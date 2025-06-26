@@ -66,9 +66,10 @@ async function startServer() {
         trackers = ['udp://tracker.opentrackr.org:1337/announce'];
     }
 
-    // --- CORS Configuration ---
-    // This allows all origins. With the unified server, it's less critical, but good for flexibility.
+    // --- Middleware ---
     app.use(cors());
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
     // --- Database Setup ---
     const dbPath = path.join('/data', 'database.json');
@@ -95,17 +96,6 @@ async function startServer() {
     let { mediaLibrary, contentRequests, storageUsage } = readDb();
     
     const upload = multer({ storage: multer.memoryStorage() });
-
-    // --- Middleware ---
-    app.use(express.json({ limit: '10mb' }));
-    app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-    // --- Static File Serving ---
-    // Serve the admin panel at /admin
-    app.use('/admin', express.static(path.join(__dirname, '../admin')));
-    // Serve the client app from the root
-    app.use(express.static(path.join(__dirname, '../client')));
-
 
     // --- Core Functions ---
     const updateStorageUsage = async () => {
@@ -280,18 +270,20 @@ async function startServer() {
         res.status(201).json({ message: 'Request submitted.', request: newRequest });
     });
 
+    // --- Static & API Routing ---
+    // IMPORTANT: API routes must be defined *before* static routes.
     app.use('/api', apiRouter);
 
-    // --- Catch-all for Client-side Routing ---
-    // This makes sure that if you refresh a page on the client app, the server still sends the main index.html file.
+    // Serve the admin panel at /admin
+    app.use('/admin', express.static(path.join(__dirname, '../admin')));
+    
+    // Serve the client app from the root
+    app.use(express.static(path.join(__dirname, '../client')));
+
+    // --- Client-side Routing Catch-all ---
+    // This handles SPA routing by sending the client's index.html for any non-API, non-file request.
     app.get('*', (req, res) => {
-        // We check if the request is for an admin sub-page and if not, we serve the client index.
-        if (!req.path.startsWith('/admin')) {
-            res.sendFile(path.join(__dirname, '../client/index.html'));
-        } else {
-            // Let the admin static serving handle it, or it will 404 if the file doesn't exist.
-            res.status(404).send('Not Found');
-        }
+        res.sendFile(path.join(__dirname, '../client/index.html'));
     });
 
     // --- Server Start ---
